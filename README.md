@@ -3,4 +3,4 @@ Hackathon team repository for WESTcoder
 Team Members:
 1. Nurtilek Koblandy
 2. Meirbek Arystanov
-3. Nurgeldi Adilov
+3. Nurkeldi Adilov
