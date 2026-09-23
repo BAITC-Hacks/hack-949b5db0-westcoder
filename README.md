@@ -1,7 +1,7 @@
 # EventMatch — умный подбор event-подрядчиков
 
 MVP команды **WESTcoder** для HackAlem. Подбор подрядчиков и команды для мероприятия по анонимизированному каталогу хакатона. 
-
+  
 Команда: Nurtilek Koblandy, Meirbek Arystanov, Nurkeldi Adilov.
 
 ## Запуск
