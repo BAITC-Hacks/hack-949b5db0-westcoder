@@ -19,6 +19,15 @@ def contains(values, value):
     return any(same(item, value) for item in values)
 
 
+def finite_number(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
+
 def duration_not_applicable(candidate, event):
     # The supplied PDF defines null for deliverables without hourly presence.
     return candidate.max_hours is None and contains(
@@ -88,8 +97,7 @@ class EventRequest:
             if key == "duration_hours" and value is None:
                 values[key] = None
                 continue
-            if (isinstance(value, bool) or not isinstance(value, (int, float))
-                    or not math.isfinite(value) or value < 0
+            if (not finite_number(value) or value < 0
                     or (key == "duration_hours" and value == 0)):
                 errors[key] = "Ожидается неотрицательное число." if key == "budget_kzt" else "Укажите положительное число часов."
             else:

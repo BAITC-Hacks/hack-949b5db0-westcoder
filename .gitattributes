@@ -1,0 +1,3 @@
+* text=auto eol=lf
+# Preserve original CSV bytes and recognize its CRLF line endings.
+data/contractors.csv -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

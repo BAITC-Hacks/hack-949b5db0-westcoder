@@ -27,7 +27,8 @@ class ApiTests(unittest.TestCase):
             with urlopen(request,timeout=5) as response:
                 return response.status, response.read(), response.headers
         except HTTPError as error:
-            return error.code,error.read(),error.headers
+            with error:
+                return error.code,error.read(),error.headers
 
     def test_metadata_and_recommendation(self):
         status, raw, _ = self.request('/api/meta')
@@ -42,6 +43,12 @@ class ApiTests(unittest.TestCase):
         for body, expected in (({},422),(None,404),(b'{broken',400),([],422),(b'x'*17000,413)):
             self.assertEqual(self.request('/api/recommend',body)[0],expected)
         self.assertEqual(self.request('/api/recommend',{},'text/plain')[0],415)
+
+    def test_extreme_input_does_not_return_500(self):
+        meta = json.loads(self.request('/api/meta')[1])
+        payload = {**meta['demos'][0]['request'], 'budget_kzt':10**400}
+        self.assertEqual(self.request('/api/recommend',payload)[0],422)
+        self.assertIn(self.request('/api/recommend',b'['*1500 + b']'*1500)[0], (400,422))
 
     def test_only_frontend_files_are_public(self):
         for path in ('/.env','/data/contractors.csv','/backend/server.py','/../README.md','/.git/config'):

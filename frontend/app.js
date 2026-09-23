@@ -2,7 +2,7 @@ const $ = (selector) => document.querySelector(selector);
 const form = $('#event-form');
 const output = $('#results');
 const dialog = $('#detail-dialog');
-const money = (value) => new Intl.NumberFormat('ru-RU', {maximumFractionDigits: 0}).format(value) + ' ₸';
+const money = (value) => new Intl.NumberFormat('ru-RU', {maximumFractionDigits: 2}).format(value) + ' ₸';
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const dateLabel = (value) => new Date(value + 'T12:00:00').toLocaleDateString('ru-RU', {day:'numeric',month:'long'});
 const capitalize = (value) => value.charAt(0).toUpperCase() + value.slice(1);
@@ -21,6 +21,29 @@ function fill(request) {
   for (const [key, value] of Object.entries(request)) {
     if (form.elements[key]) form.elements[key].value = value ?? '';
   }
+  validateDuration();
+}
+
+function validateDuration() {
+  const input = $('#duration_hours');
+  input.setCustomValidity(input.value !== '' && Number(input.value) <= 0 ? 'Укажите положительное число часов.' : '');
+}
+
+async function fetchJson(url, options = {}) {
+  let response;
+  try {
+    response = await fetch(url, {...options, signal: AbortSignal.timeout(20000)});
+  } catch (error) {
+    throw new Error(error.name === 'TimeoutError' ? 'Сервер отвечает слишком долго. Попробуйте ещё раз.' : 'Нет связи с сервером. Проверьте подключение и повторите запрос.');
+  }
+  let body;
+  try {
+    body = await response.json();
+  } catch {
+    throw new Error('Сервер вернул некорректный ответ. Попробуйте ещё раз.');
+  }
+  if (!response.ok) throw new Error(body.fields ? Object.values(body.fields).join(' ') : body.error || 'Не удалось выполнить запрос.');
+  return body;
 }
 
 function readForm() {
@@ -40,6 +63,7 @@ function setBusy(busy) {
 }
 
 async function search() {
+  validateDuration();
   if (pending || !form.reportValidity()) return;
   const payload = readForm();
   setBusy(true);
@@ -47,12 +71,11 @@ async function search() {
   $('#dirty-notice').hidden = true;
   output.innerHTML = '<div class="loading-card panel"><span class="loader"></span><h2>Ищем совпадения</h2><p>Проверяем условия и сравниваем подходящие профили.</p></div>';
   try {
-    const response = await fetch('/api/recommend', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(20000)});
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.fields ? Object.values(body.fields).join(' ') : body.error || 'Не удалось выполнить подбор.');
+    const body = await fetchJson('/api/recommend', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     result = body;
     render(body);
   } catch (error) {
+    result = null;
     const message = error.name === 'TimeoutError' ? 'Сервер отвечает слишком долго. Попробуйте ещё раз.' : error.message;
     $('#form-error').textContent = message;
     $('#form-error').hidden = false;
@@ -72,10 +95,11 @@ function card(candidate, index, request) {
   const saving = request.budget_kzt - candidate.price_from_kzt;
   const excerpt = candidate.description.length > 145 ? candidate.description.slice(0,145).replace(/\s+\S*$/, '') + '…' : candidate.description;
   const explanation = `Цена от ${money(candidate.price_from_kzt)} оставляет ${money(saving)} в бюджете. ${excerpt ? 'Из профиля: «' + excerpt + '»' : 'Профиль поддерживает выбранный формат и доступен по календарю.'}`;
+  const hours = candidate.max_hours !== null ? 'До ' + candidate.max_hours + ' ч' : ['Флорист','Декоратор','Подарки и сувениры'].includes(request.category) ? 'Без почасового присутствия' : 'Длительность не указана';
   return `<article class="candidate-card panel">
     <div class="card-top"><div class="avatar tone-${index}">${esc(initials)}</div><div class="candidate-name"><h3>${esc(candidate.name)}</h3><div class="candidate-meta">${esc(candidate.category)} <span>·</span> ${esc(candidate.city)}</div></div><div class="score"><strong>${candidate.score.toLocaleString('ru-RU')}<span>%</span></strong><small>совпадение</small></div></div>
     <div class="match-row"><div class="price"><small>от</small> ${money(candidate.price_from_kzt)}${candidate.price_imputed ? '<small>*</small>' : ''}</div><span class="available">✓ ${esc(dateLabel(request.date))} · нет занятости</span></div>
-    <div class="attribute-row"><span class="attribute">${esc(candidate.languages.map(capitalize).join(' · ') || 'Языки не указаны')}</span><span class="attribute">${esc(capitalize(request.event_format))}</span><span class="attribute">${candidate.max_hours === null ? 'Без почасового лимита / уточнить' : 'До ' + candidate.max_hours + ' ч'}</span></div>
+    <div class="attribute-row"><span class="attribute">${esc(candidate.languages.map(capitalize).join(' · ') || 'Языки не указаны')}</span><span class="attribute">${esc(capitalize(request.event_format))}</span><span class="attribute">${esc(hours)}</span></div>
     ${warningTags(candidate)}
     <div class="explanation-box"><h4><span>✦</span> Почему рекомендуем</h4><p>${esc(explanation)}</p></div>
     <div class="card-bottom"><span>${index === 0 ? 'Первый по оценке совпадения' : `№ ${index + 1} в вашей подборке`}</span><button class="detail-button" data-detail="${index}">Подробнее о совпадении <span>↗</span></button></div>
@@ -88,7 +112,7 @@ function funnel(data) {
   const lowerRank = data.eligible_candidates - data.recommendations.length;
   return `<section class="funnel-panel panel"><div class="section-top"><span>◎</span><h3>Как мы выбрали?</h3><small>ПРОЗРАЧНЫЙ ПОДБОР</small></div><p class="section-caption">Каждый шаг — проверка вашего условия. Занятые на дату исключаются.</p>
     <div class="funnel">${visibleStages.map(([key,count]) => `<div class="funnel-step"><strong>${count}</strong><span>${stageLabels[key]}</span></div>`).join('')}</div>
-    <div class="exclusions">${reasons.map(([key,count]) => `<span><b>${count}</b> — ${labels[key]}</span>`).join('')}${lowerRank > 0 ? `<span><b>${lowerRank}</b> — ниже в рейтинге</span>` : ''}${!reasons.length && lowerRank <= 0 ? '<span>Все кандидаты выбранной категории, прошедшие условия, показаны.</span>' : ''}</div>
+    <div class="exclusions">${reasons.map(([key,count]) => `<span><b>${count}</b> — ${labels[key]}</span>`).join('')}${lowerRank > 0 ? `<span><b>${lowerRank}</b> — ниже в рейтинге</span>` : ''}${!reasons.length && lowerRank <= 0 ? `<span>${data.total_candidates ? 'Все кандидаты выбранной категории, прошедшие условия, показаны.' : 'В выбранном городе нет профилей этой категории.'}</span>` : ''}</div>
     <details class="audit-details"><summary>Причина исключения каждого профиля (${data.excluded_candidates.length})</summary><p>В воронке профиль учитывается один раз — на первом непройденном условии.</p><ul>${data.excluded_candidates.map(c => `<li>${esc(c.name)} <small>${esc(c.id)}</small> — ${c.all_reasons.map(r => esc(labels[r] || r)).join('; ')}</li>`).join('')}</ul></details>
   </section>`;
 }
@@ -129,18 +153,21 @@ function showProfile(candidate) {
 $('#about-method').addEventListener('click', () => openDialog('КАК ЭТО РАБОТАЕТ', '<h2>Каждое совпадение объяснимо.</h2><ol><li>Берём профили только из приложенного каталога.</li><li>Проверяем город, категорию, занятость, формат, бюджет, часы и язык.</li><li>Оцениваем прошедших кандидатов: запас бюджета — вес 35, формат — 25, язык — 15, длительность — 10, сходство описания — 15. Неактивные факторы исключаем, веса нормируем.</li><li>Сортируем по оценке. При равенстве — по ID. Показываем до трёх профилей.</li><li>Объясняем факты и предлагаем конкретные изменения условий, которые увеличат число вариантов.</li></ol><p>Embeddings — опциональный анализ смысла описания. Без него подбор работает по явным условиям. Объяснения составляются из фактов датасета; новые качества и цены не придумываются.</p>'));
 $('#about-data').addEventListener('click', () => {
   if (!metadata) return;
-  openDialog('ВАШ КАТАЛОГ', `<h2>66 историй. Один понятный выбор.</h2><div class="data-stats"><div><strong>${metadata.total}</strong><small>профилей</small></div><div><strong>${metadata.categories.length}</strong><small>категорий</small></div><div><strong>${metadata.cities.length}</strong><small>локации</small></div></div><p>Источник — предоставленный анонимизированный CSV. Имена вымышленные. Новые профили не добавлялись.</p><p>Города: ${esc(metadata.cities.join(', '))}.<br>Календарь: ${metadata.calendar_start} — ${metadata.calendar_end}.</p><p>Синтетических профилей: ${metadata.synthetic}. Город проставлен: ${metadata.city_imputed}. Цена проставлена: ${metadata.price_imputed}.</p><p>Для флористов, декораторов и сувениров пустой лимит часов означает работу без почасового присутствия. В других категориях неизвестный лимит не подтверждает длительность.</p>`);
+  openDialog('ВАШ КАТАЛОГ', `<h2>Ваш каталог. Понятный выбор.</h2><div class="data-stats"><div><strong>${metadata.total}</strong><small>профилей</small></div><div><strong>${metadata.categories.length}</strong><small>категорий</small></div><div><strong>${metadata.cities.length}</strong><small>локации</small></div></div><p>Источник — загруженный каталог. Новые профили не добавлялись.</p><p>Города: ${esc(metadata.cities.join(', '))}.<br>Календарь: ${esc(metadata.calendar_start)} — ${esc(metadata.calendar_end)}.</p><p>Синтетических профилей: ${metadata.synthetic}. Город проставлен: ${metadata.city_imputed}. Цена проставлена: ${metadata.price_imputed}.</p><p>Для флористов, декораторов и сувениров пустой лимит часов означает работу без почасового присутствия. В других категориях неизвестный лимит не подтверждает длительность.</p>`);
 });
 $('#close-dialog').addEventListener('click', () => dialog.close());
 dialog.addEventListener('click', event => { if (event.target === dialog && (event.offsetX < 0 || event.offsetY < 0 || event.offsetX > dialog.clientWidth || event.offsetY > dialog.clientHeight)) dialog.close(); });
 form.addEventListener('submit', event => {event.preventDefault();search();});
-form.addEventListener('input', () => {if (result) $('#dirty-notice').hidden = false; document.querySelectorAll('.demo-button').forEach(el => el.classList.remove('selected'));});
+form.addEventListener('input', () => {validateDuration(); if (result) $('#dirty-notice').hidden = false; document.querySelectorAll('.demo-button').forEach(el => el.classList.remove('selected'));});
 
 async function init() {
+  if (pending) return;
+  setBusy(true);
   try {
-    const response = await fetch('/api/meta', {signal:AbortSignal.timeout(10000)});
-    if (!response.ok) throw new Error('Каталог временно недоступен.');
-    metadata = await response.json();
+    metadata = await fetchJson('/api/meta');
+    if (!metadata.cities.length || !metadata.categories.length || !metadata.event_formats.length) {
+      throw new Error('В каталоге не хватает городов, категорий или форматов для подбора.');
+    }
     populate('#city',metadata.cities);
     populate('#category',metadata.categories);
     populate('#event_format',metadata.event_formats);
@@ -148,17 +175,18 @@ async function init() {
     $('#date').min = metadata.calendar_start;
     $('#date').max = metadata.calendar_end;
     $('#catalog-count').textContent = metadata.total + ' профилей в каталоге';
-    $('#calendar-note').textContent = '23 сентября — 31 декабря 2026';
+    $('#calendar-note').textContent = `${dateLabel(metadata.calendar_start)} — ${dateLabel(metadata.calendar_end)} ${metadata.calendar_end.slice(0,4)}`;
     $('#demo-buttons').innerHTML = metadata.demos.map((demo,i) => `<button class="demo-button ${i === 0 ? 'selected' : ''}" data-demo="${i}">${esc(demo.title)}</button>`).join('');
     document.querySelectorAll('[data-demo]').forEach(button => button.addEventListener('click', () => {
       fill(metadata.demos[Number(button.dataset.demo)].request);
       document.querySelectorAll('.demo-button').forEach(el => el.classList.toggle('selected',el === button));
       search();
     }));
-    fill(metadata.demos[0].request);
+    fill(metadata.demos[0]?.request || {city:metadata.cities[0], category:metadata.categories[0], event_format:metadata.event_formats[0], date:metadata.calendar_start, budget_kzt:600000, duration_hours:null, language:null});
     setBusy(false);
     await search();
   } catch (error) {
+    pending = false;
     output.setAttribute('aria-busy','false');
     $('#catalog-count').textContent = 'Каталог недоступен';
     output.innerHTML = `<div class="empty-state panel"><h3>Не удалось загрузить каталог</h3><p>${esc(error.message)} Убедитесь, что backend запущен.</p><button class="retry-button" id="retry-init">Повторить</button></div>`;

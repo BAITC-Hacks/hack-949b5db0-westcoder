@@ -2,7 +2,8 @@ from .models import duration_not_applicable
 
 
 def money(value):
-    return f"{value:,.0f}".replace(",", " ") + " ₸"
+    amount = f"{value:,.2f}".rstrip("0").rstrip(".")
+    return amount.replace(",", " ").replace(".", ",") + " ₸"
 
 
 def explain(candidate, event):

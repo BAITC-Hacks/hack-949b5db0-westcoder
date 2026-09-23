@@ -105,6 +105,12 @@ class RecommendationTests(unittest.TestCase):
             with self.subTest(payload=payload), self.assertRaises(ValidationError):
                 EventRequest.parse(payload)
 
+    def test_extremely_large_numbers_are_validation_errors(self):
+        for key in ("budget_kzt", "duration_hours"):
+            with self.subTest(key=key), self.assertRaises(ValidationError):
+                EventRequest.parse({**asdict(self.event), key:10**400})
+        self.assertIsNone(normalize({"id":"fixture", "price_from_kzt":10**400}).price_from_kzt)
+
     def test_repeatability_and_tie_breaker(self):
         first = self.service.recommend(asdict(self.event))
         for _ in range(5):
@@ -162,6 +168,30 @@ class RecommendationTests(unittest.TestCase):
                 rows = [asdict(self.profile)]
                 path.write_text(json.dumps(rows if suffix == ".json" else rows[0]), encoding="utf-8")
                 self.assertEqual(Dataset(path).contractors[0].id, self.profile.id)
+
+    def test_demos_use_alternative_catalog_values(self):
+        fixture = replace(self.profile, city="Другой город", categories=("Другая категория",),
+                          event_formats=("Другой формат",), languages=(), price_from_kzt=1234,
+                          max_hours=0.25, busy_dates=())
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "fixture.json"
+            for candidate in (fixture, replace(fixture, price_from_kzt=0)):
+                path.write_text(json.dumps([asdict(candidate)]), encoding="utf-8")
+                dataset = Dataset(path)
+                service = RecommendationService(dataset)
+                demos = build_demos(dataset)
+                self.assertTrue(demos)
+                for demo in demos:
+                    request = demo["request"]
+                    self.assertEqual(request["city"], candidate.city)
+                    self.assertIn(request["category"], candidate.categories)
+                    self.assertIn(request["event_format"], candidate.event_formats)
+                    self.assertEqual(service.recommend(request)["eligible_candidates"], demo["expected_eligible"])
+
+    def test_money_does_not_round_fractional_prices_to_integer(self):
+        from backend.explanations import money
+        self.assertEqual(money(1234.5), "1 234,5 ₸")
+        self.assertEqual(money(1234), "1 234 ₸")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,8 @@
 from dataclasses import asdict, replace
 import tempfile
+import json
+import sqlite3
+from contextlib import closing
 import unittest
 from unittest.mock import patch
 from backend.dataset import Dataset
@@ -24,6 +27,9 @@ class SemanticTests(unittest.TestCase):
         self.assertEqual(cosine([1,0], [0,1]), 0)
         with self.assertRaises(ValueError): cosine([1], [1,0])
         with self.assertRaises(ValueError): cosine([0,0], [0,0])
+        with self.assertRaises(ValueError): cosine([float('nan')], [1])
+        with self.assertRaises(ValueError): cosine([True], [1])
+        self.assertEqual(cosine([1e300,0], [1e300,0]), 1)
 
     def test_real_vector_path_only_receives_eligible_descriptions_and_caches(self):
         with patch.object(self.matcher, "_embed", side_effect=lambda texts:[[1.0,float(i % 2)] for i,_ in enumerate(texts)]) as embed:
@@ -53,6 +59,27 @@ class SemanticTests(unittest.TestCase):
             scores, mode = self.matcher.similarities(self.event,self.candidates,self.dataset.fingerprint)
         self.assertIsNone(scores)
         self.assertEqual(mode,"unavailable")
+
+    def test_nearby_budgets_have_separate_cache_entries(self):
+        with patch.object(self.matcher, "_embed", side_effect=lambda texts:[[1.0,1.0] for _ in texts]):
+            for budget in (299999.9, 300000.1):
+                event = replace(self.event, budget_kzt=budget)
+                eligible = hard_filter(self.dataset.contractors, event)[0]
+                scores, mode = self.matcher.similarities(event, eligible, self.dataset.fingerprint)
+                self.assertEqual(mode, "embeddings")
+                self.assertEqual(set(scores), {c.id for c in eligible})
+
+    def test_corrupt_cached_decision_never_crashes_recommendations(self):
+        with patch.object(self.matcher, "_embed", side_effect=lambda texts:[[1.0,1.0] for _ in texts]):
+            self.matcher.similarities(self.event, self.candidates, self.dataset.fingerprint)
+        for invalid in ({}, [], {"mode":"embeddings", "scores":{}},
+                        {"mode":"embeddings", "scores":{c.id:float('nan') for c in self.candidates}}):
+            with self.subTest(invalid=invalid):
+                with closing(sqlite3.connect(self.matcher.cache_dir / "embeddings.sqlite3")) as db, db:
+                    db.execute("UPDATE decisions SET value=?", (json.dumps(invalid),))
+                result = RecommendationService(self.dataset,self.matcher).recommend(asdict(self.event))
+                self.assertNotEqual(result["semantic_mode"], "embeddings")
+                self.assertTrue(all("semantic" not in c["score_breakdown"] for c in result["recommendations"]))
 
     def test_missing_key_and_disabled(self):
         for enabled, expected in ((False,"disabled"),(True,"missing_key")):

@@ -25,7 +25,7 @@ def number(value):
     try:
         result = float(value)
         return result if math.isfinite(result) and result >= 0 else None
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         return None
 
 
@@ -37,6 +37,10 @@ def normalize(row):
     busy = items(row.get("busy_dates"))
     known = "busy_dates" in row and row["busy_dates"] is not None
     if not isinstance(row.get("busy_dates"), (str, list, tuple)):
+        known = False
+    if isinstance(row.get("busy_dates"), (list, tuple)) and any(
+        not isinstance(value, str) or not value.strip() for value in row["busy_dates"]
+    ):
         known = False
     try:
         for day in busy:

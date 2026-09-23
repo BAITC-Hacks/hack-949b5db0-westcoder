@@ -65,7 +65,10 @@ def make_server(host="127.0.0.1", port=8000, service=None):
                 size = int(self.headers.get("Content-Length", "0"))
                 if not 0 < size <= 16384:
                     return self.send(413, {"error": "Размер запроса должен быть от 1 до 16384 байт."})
-                payload = json.loads(self.rfile.read(size))
+                try:
+                    payload = json.loads(self.rfile.read(size))
+                except RecursionError:
+                    return self.send(400, {"error": "Слишком большая вложенность JSON."})
                 self.send(200, service.recommend(payload))
             except ValidationError as error:
                 self.send(422, {"error": str(error), "fields": error.errors})

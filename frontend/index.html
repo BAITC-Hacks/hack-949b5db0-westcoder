@@ -35,9 +35,9 @@
             <label for="date">Дата мероприятия <span>*</span></label><input id="date" name="date" type="date" required disabled><small class="field-note" id="calendar-note">Календарь датасета · осень–зима 2026</small>
             <label for="event_format">Формат мероприятия <span>*</span></label><select id="event_format" name="event_format" required disabled></select>
             <label for="category">Кого ищем <span>*</span></label><select id="category" name="category" required disabled></select>
-            <label for="budget_kzt">Бюджет на подрядчика <span>*</span></label><div class="input-unit"><input id="budget_kzt" name="budget_kzt" type="number" min="0" step="1000" required placeholder="300 000" disabled><span>₸</span></div>
+            <label for="budget_kzt">Бюджет на подрядчика <span>*</span></label><div class="input-unit"><input id="budget_kzt" name="budget_kzt" type="number" min="0" step="any" required placeholder="300 000" disabled><span>₸</span></div>
             <div class="optional-divider"><span>Дополнительно</span><small>необязательно</small></div>
-            <div class="form-row"><div><label for="duration_hours">Длительность</label><div class="input-unit"><input id="duration_hours" name="duration_hours" type="number" min="0.5" step="0.5" placeholder="Любая" disabled><span>ч</span></div></div><div><label for="language">Язык</label><select id="language" name="language" disabled></select></div></div>
+            <div class="form-row"><div><label for="duration_hours">Длительность</label><div class="input-unit"><input id="duration_hours" name="duration_hours" type="number" min="0" step="any" placeholder="Любая" disabled><span>ч</span></div></div><div><label for="language">Язык</label><select id="language" name="language" disabled></select></div></div>
             <div id="form-error" role="alert" hidden></div>
             <button class="primary-button" id="submit-button" type="submit" disabled><span>✦</span> Подобрать подрядчиков <span>→</span></button>
             <p class="form-footnote">Только ваш каталог. Только подходящие варианты.</p>
