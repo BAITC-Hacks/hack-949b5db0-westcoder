@@ -21,5 +21,8 @@ def build_demos(dataset):
         found.append({"title": title, "request": asdict(best[1]), "expected_eligible": best[0]})
     empty = {**found[0]["request"], "budget_kzt": 50000}
     found.append({"title": "Никто не подходит", "request": empty, "expected_eligible": 0})
-    found.append({"title": "Категории нет", "request": {**empty, "city": "Зарубежье"}, "expected_eligible": 0})
+    absent = next((city, category) for city in dataset.metadata()["cities"]
+                  for category in dataset.metadata()["categories"]
+                  if not any(c.city == city and category in c.categories for c in rows))
+    found.append({"title": "Категории нет", "request": {**empty, "city": absent[0], "category": absent[1]}, "expected_eligible": 0})
     return found
