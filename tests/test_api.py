@@ -54,7 +54,7 @@ class ApiTests(unittest.TestCase):
     def test_only_frontend_files_are_public(self):
         for path in ('/.env','/data/contractors.csv','/backend/server.py','/../README.md','/.git/config'):
             self.assertEqual(self.request(path)[0],404)
-        for path in ('/','/app.js','/features.js','/styles.css','/features.css','/favicon.svg'):
+        for path in ('/','/app.js','/features.js','/planner.js','/styles.css','/features.css','/studio.css','/favicon.svg'):
             status, body, headers = self.request(path)
             self.assertEqual(status,200)
             self.assertGreater(len(body),0)
@@ -85,6 +85,19 @@ class ApiTests(unittest.TestCase):
         handler.send(200, {'days': []})
         self.assertTrue(handler.close_connection)
         handler.send_response.assert_called_once_with(200)
+
+    def test_brief_and_plan_end_to_end(self):
+        status, raw, _ = self.request('/api/brief', {'text': 'Свадьба в Алматы 2026-09-26. Бюджет 2 млн тенге. Фотограф и ведущий.'})
+        self.assertEqual(status, 200)
+        brief = json.loads(raw)
+        self.assertEqual(brief['mode'], 'local')
+        payload = {**brief['draft'], 'roles': [{'category': role} for role in brief['draft']['roles']]}
+        status, raw, _ = self.request('/api/plan', payload)
+        self.assertEqual(status, 200)
+        self.assertTrue(json.loads(raw)['alternatives'])
+        for path in ('/api/brief', '/api/plan'):
+            self.assertEqual(self.request(path, {})[0], 422)
+            self.assertIn(self.request(path, b'['*1500+b']'*1500)[0], (400, 422))
 
 
 if __name__ == '__main__':

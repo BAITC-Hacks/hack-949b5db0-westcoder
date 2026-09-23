@@ -3,36 +3,47 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#7057d9">
+  <meta name="theme-color" content="#183d36">
+  <meta name="description" content="От идеи события до команды в бюджете. Подрядчики, объяснимый подбор, запасные даты и готовый бриф.">
   <title>EventMatch — подрядчики под ваше событие</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/features.css">
+  <link rel="stylesheet" href="/studio.css">
+  <script type="module" src="/planner.js"></script>
+  <script type="module" src="/planner.js"></script>
   <script type="module" src="/app.js"></script>
 </head>
 <body>
   <a class="skip" href="#event-form">Перейти к подбору</a>
   <aside class="sidebar">
-    <a href="/" class="brand"><span class="brand-mark">e<span>✦</span></span>eventmatch<span class="brand-dot">.</span></a>
-    <div class="workspace-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
+    <a href="/" class="brand" aria-label="EventMatch — главная"><span class="brand-mark" aria-hidden="true">em</span>eventmatch<span class="brand-dot">.</span></a>
+    <div class="workspace-label">СТУДИЯ СОБЫТИЙ</div>
     <nav aria-label="Основная навигация">
-      <a class="nav-item active" href="#event-form"><span>✦</span> Умный подбор <small>AI</small></a>
-      <button class="nav-item" id="about-data"><span>▦</span> О каталоге</button>
-      <button class="nav-item" id="about-method"><span>◎</span> Как это работает</button>
-      <a class="nav-item" href="#team-panel"><span>♧</span> Собрать команду</a>
-      <a class="nav-item" href="#saved-panel"><span>♡</span> Избранное <small id="saved-count">0</small></a>
+      <a class="nav-item active" href="#brief-panel"><span aria-hidden="true">01</span> Идея события</a>
+      <a class="nav-item" href="#selection"><span aria-hidden="true">02</span> Подрядчики</a>
+      <a class="nav-item" href="#team-panel"><span aria-hidden="true">03</span> Команда и план Б</a>
+      <a class="nav-item" href="#saved-panel"><span aria-hidden="true">♡</span> Избранное <small id="saved-count">0</small></a>
+      <div class="nav-divider"></div>
+      <button class="nav-item" id="about-data"><span aria-hidden="true">▦</span> О каталоге</button>
+      <button class="nav-item" id="about-method"><span aria-hidden="true">◎</span> Как это работает</button>
     </nav>
-    <div class="sidebar-note"><span class="tiny-spark">✧</span><strong>Ваше событие.<br>Ваши люди.</strong><p>Находим совпадения.<br>Объясняем каждое.</p><span class="note-line"></span></div>
-    <div class="sidebar-bottom"><span class="team-avatar">W</span><div><strong>WESTcoder</strong><small>HackAlem · 2026</small></div><span class="status-dot"></span></div>
+    <div class="sidebar-note"><span class="tiny-spark" aria-hidden="true">↗</span><strong>От хорошей идеи<br>к вашему событию.</strong><p>Сначала план.<br>Потом — правильные люди.</p></div>
+    <div class="sidebar-bottom"><span class="team-avatar">W</span><div><strong>WESTcoder</strong><small>HackAlem · 2026</small></div></div>
   </aside>
   <div class="app-shell">
-    <header class="topbar"><div class="breadcrumb">Рабочее пространство <span>/</span> <strong>Умный подбор</strong></div><span class="demo-label"><span></span> Хакатон · MVP</span></header>
+    <header class="topbar"><div class="breadcrumb">Ваше рабочее пространство <span>/</span> <strong>Новое событие</strong></div><span class="demo-label"><span></span> Демо-каталог · 2026</span></header>
     <main>
-      <section class="page-title"><div><div class="eyebrow">МЕНЬШЕ ПОИСКА. БОЛЬШЕ СОВПАДЕНИЙ.</div><h1>Люди, с которыми всё сложится<span>.</span></h1><p>До трёх подрядчиков под ваше событие — с понятным «почему».</p></div><span class="catalog-pill" id="catalog-count">Загружаем каталог…</span></section>
-      <section class="intro-banner" aria-label="О сервисе"><div class="banner-icon">✦</div><div><strong>Хорошее событие начинается с правильной команды</strong><p>Учитываем город, дату, формат и бюджет. Вы выбираете из тех, кто подходит.</p></div><div class="banner-art" aria-hidden="true"><span class="orbit one"></span><span class="orbit two"></span><span class="orbit three"></span><b>✳</b></div></section>
+      <section class="page-title"><div><div class="eyebrow">EVENTMATCH / ВАШ ПЛАН НА ОСОБЕННЫЙ ДЕНЬ</div><h1>Событие начинается<br>с <em>ваших людей.</em></h1><p>Расскажите об идее. Найдите команду. Оставьте место для самого важного.</p><a class="hero-link" href="#brief-panel">Спланировать событие <span aria-hidden="true">↗</span></a></div><div class="hero-composition" aria-hidden="true"><div class="hero-orbit"></div><div class="paper-note"><span>THE EVENT EDIT</span><strong>Всё<br>складывается.</strong><div class="paper-line"></div><small>Идея · Люди · Детали</small></div><div class="mini-note"><span>✓</span> У каждого выбора<br><b>есть причина.</b></div><div class="hero-flower">✳</div></div></section>
+      <div class="trust-strip"><span id="catalog-count">Загружаем каталог…</span><span>Цены в ₸</span><span>Объяснимый подбор</span><span>Одна дата для всей команды</span></div>
+      <section class="panel brief-panel" id="brief-panel" aria-labelledby="brief-title">
+        <div class="brief-intro"><span class="section-index">01 / ИДЕЯ</span><h2 id="brief-title">Начните своими словами.</h2><p>Камерная свадьба или большой корпоратив? Превратим описание в план, который можно уточнить.</p><span class="mode-pill" id="brief-mode">Разбор описания</span></div>
+        <div class="brief-workspace"><form id="brief-form"><label for="brief-text">Каким вы видите событие?</label><textarea id="brief-text" minlength="10" maxlength="1500" rows="4" required placeholder="Свадьба в Алматы 26.09.2026. Бюджет 2 млн тенге. Нужны фотограф и ведущий на 6 часов. Живые эмоции, без громких конкурсов."></textarea><div class="brief-examples"><span>Попробовать:</span><button type="button" data-brief-example="wedding">Камерная свадьба ↗</button><button type="button" data-brief-example="corporate">Корпоратив ↗</button></div><div class="brief-actions"><small id="brief-privacy">Проверьте черновик перед применением.</small><button class="primary-button" id="brief-submit" disabled>Создать черновик <span aria-hidden="true">↗</span></button></div></form><p class="notice" id="brief-error" role="alert" hidden></p><div id="brief-result" aria-live="polite"></div></div>
+      </section>
+      <div class="section-title" id="selection"><div><span class="section-index">02 / ПОДРЯДЧИКИ</span><h2>Короткий список. Точное попадание.</h2></div><p>До трёх вариантов с объяснением каждого выбора.</p></div>
       <div class="workspace">
         <section class="form-panel panel">
-          <div class="panel-heading"><span class="step-number">01</span><div><h2>Ваше мероприятие</h2><p>Расскажите самое важное</p></div></div>
+          <div class="panel-heading"><span class="step-number" aria-hidden="true">↗</span><div><h2>Условия подбора</h2><p>Всё важное — в одном месте</p></div></div>
           <form id="event-form">
             <label for="city">Город <span>*</span></label><select id="city" name="city" required disabled><option>Загрузка…</option></select>
             <label for="date">Дата мероприятия <span>*</span></label><input id="date" name="date" type="date" required disabled><small class="field-note" id="calendar-note">Календарь датасета · осень–зима 2026</small>
@@ -57,18 +68,22 @@
         </section>
       </div>
       <section class="panel feature-section" id="team-panel" aria-labelledby="team-title">
-        <div class="section-heading"><div><div class="eyebrow">ВСЕ НА ОДНУ ДАТУ</div><h2 id="team-title">Соберите команду</h2></div><button type="button" class="secondary-button" id="copy-event" disabled>Взять параметры мероприятия</button></div>
+        <div class="section-heading"><div><div class="section-index">03 / КОМАНДА И ПЛАН Б</div><h2 id="team-title">Вместе. В вашу дату. В бюджет.</h2></div><button type="button" class="secondary-button" id="copy-event" disabled>Взять параметры мероприятия</button></div>
         <p class="section-description">Выберите до пяти ролей. Найдём полную команду с минимальной суммой стартовых цен в вашем бюджете. Для каждой роли — отдельный подрядчик.</p>
         <form id="team-form">
           <div class="team-fields"><div><label for="team-city">Город</label><select id="team-city" required disabled></select></div><div><label for="team-date">Дата</label><input id="team-date" type="date" required disabled></div><div><label for="team-format">Формат</label><select id="team-format" required disabled></select></div><div><label for="team-budget">Общий бюджет, ₸</label><input id="team-budget" type="number" min="0" step="any" value="2000000" required disabled></div><div><label for="team-language">Язык</label><select id="team-language" disabled></select></div></div>
           <div class="team-role-heading"><h3>Роли и часы работы</h3><span>Оставьте часы пустыми, если пока не определились.</span></div>
           <div id="team-roles"></div>
           <button type="button" id="add-role" class="secondary-button" disabled>+ Добавить роль</button>
+          <label for="team-preferences">Пожелания для брифа</label><textarea id="team-preferences" rows="2" maxlength="1500" placeholder="Стиль, атмосфера и детали, которые нужно обсудить…" disabled></textarea><small class="field-note">Сохраним в брифе. Состав команды выбирается по обязательным условиям и минимальной сумме цен.</small>
           <p id="team-error" class="notice" role="alert" hidden></p>
           <button type="submit" class="primary-button" id="team-submit" disabled>Подобрать команду →</button>
         </form>
         <p id="team-dirty" class="notice" hidden>Условия команды изменены. Выполните подбор заново.</p>
         <div id="team-results" aria-live="polite"></div>
+        <div class="plan-toolbar"><div><h3>А если немного изменить дату?</h3><p>Сравните команды на соседние даты и оставьте запас на дополнительные расходы.</p></div><label for="reserve-percent">Резерв бюджета<select id="reserve-percent"><option value="0">Без резерва</option><option value="10" selected>10%</option><option value="15">15%</option><option value="20">20%</option><option value="30">30%</option></select></label><button class="secondary-button" id="plan-button" disabled>Проверить план Б ↗</button></div>
+        <div id="plan-results" aria-live="polite"></div>
+        <div id="handoff" hidden><div><span class="section-index">СЛЕДУЮЩИЙ ШАГ</span><h3>Ваш план готов к обсуждению.</h3><p>Скачайте бриф с составом команды, ценами и вопросами к подрядчикам.</p></div><button class="primary-button" id="export-brief">Скачать бриф ↓</button></div>
       </section>
       <section class="panel feature-section" id="saved-panel" aria-labelledby="saved-title">
         <div class="section-heading"><div><div class="eyebrow">ВАШ КОРОТКИЙ СПИСОК</div><h2 id="saved-title">Избранное и сравнение</h2></div><button class="secondary-button" id="compare-button" disabled>Сравнить (0/4)</button></div>
@@ -76,9 +91,9 @@
         <p id="storage-notice" class="notice" role="status" hidden></p><div id="saved-profiles"></div>
       </section>
       <div id="comparison-bar" class="comparison-bar" hidden><span id="comparison-status"></span><button type="button" id="open-comparison">Сравнить</button><button type="button" id="clear-comparison">Сбросить</button></div>
-      <footer><span><span class="footer-spark">✦</span> eventmatch · Сделано командой WESTcoder</span><span>Осмысленный выбор для важных событий</span></footer>
+      <footer><span>eventmatch © 2026 · WESTcoder</span><span>Цены «от». Доступность подтверждает подрядчик.</span></footer>
     </main>
   </div>
-  <dialog id="detail-dialog"><div class="dialog-top"><span class="eyebrow" id="dialog-label">ПОДРОБНОСТИ</span><button id="close-dialog" aria-label="Закрыть">×</button></div><div id="dialog-content"></div></dialog>
+  <dialog id="detail-dialog" aria-labelledby="dialog-label"><div class="dialog-top"><span class="eyebrow" id="dialog-label">ПОДРОБНОСТИ</span><button id="close-dialog" aria-label="Закрыть">×</button></div><div id="dialog-content"></div></dialog>
 </body>
 </html>

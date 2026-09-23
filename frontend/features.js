@@ -183,7 +183,7 @@ function addRole(category, hours='') {
   if ($('#team-roles').children.length >= 5) return;
   const row = document.createElement('div');
   row.className = 'team-role';
-  row.innerHTML = `<label>Категория<select class="role-category" required>${options(meta.categories,category)}</select></label><label>Часы подрядчика<input class="role-hours" type="number" min="0.5" step="any" placeholder="Любые" value="${esc(hours)}"></label><button type="button" class="secondary-button remove-role" aria-label="Удалить роль">×</button>`;
+  row.innerHTML = `<label>Категория<select class="role-category" required>${options(meta.categories,category)}</select></label><label>Часы подрядчика<input class="role-hours" type="number" min="0" step="any" placeholder="Любые" value="${esc(hours)}"></label><button type="button" class="secondary-button remove-role" aria-label="Удалить роль">×</button>`;
   row.querySelector('button').onclick = () => {row.remove(); updateRoleButtons(); dirtyTeam();};
   $('#team-roles').append(row);
   updateRoleButtons();
@@ -196,7 +196,9 @@ function updateRoleButtons() {
 }
 
 function dirtyTeam() {
+  document.querySelectorAll('.role-hours').forEach(input => input.setCustomValidity(input.value !== '' && Number(input.value) <= 0 ? 'Укажите положительное число часов.' : ''));
   if (teamHasResult) $('#team-dirty').hidden = false;
+  document.dispatchEvent(new CustomEvent('eventmatch:team-dirty'));
 }
 
 function initTeam() {
@@ -209,13 +211,14 @@ function initTeam() {
   $('#team-date').value = request.date;
   const defaults = ['Фотограф','Ведущий'].filter(c => meta.categories.includes(c));
   (defaults.length ? defaults : meta.categories.slice(0,1)).forEach(c => addRole(c));
-  $('#team-form').querySelectorAll('input,select,button').forEach(el => el.disabled = false);
+  $('#team-form').querySelectorAll('input,select,textarea,button').forEach(el => el.disabled = false);
   updateRoleButtons();
   $('#copy-event').disabled = false;
   $('#copy-event').onclick = () => {
     const event = hooks.readForm();
     $('#team-city').value = event.city; $('#team-date').value = event.date;
     $('#team-format').value = event.event_format; $('#team-language').value = event.language || '';
+    $('#team-preferences').value = event.preferences || '';
     dirtyTeam();
   };
   $('#add-role').onclick = () => {
@@ -223,21 +226,32 @@ function initTeam() {
     addRole(meta.categories.find(c => !used.includes(c)) || meta.categories[0]); dirtyTeam();
   };
   $('#team-form').addEventListener('input', dirtyTeam);
+  document.addEventListener('eventmatch:apply-team', event => {
+    if (teamPending) return;
+    const request = event.detail;
+    $('#team-city').value = request.city; $('#team-date').value = request.date;
+    $('#team-format').value = request.event_format; $('#team-language').value = request.language || '';
+    $('#team-budget').value = request.budget_kzt; $('#team-preferences').value = request.preferences || '';
+    $('#team-roles').innerHTML = '';
+    request.roles.forEach(role => addRole(role.category, role.duration_hours ?? ''));
+    dirtyTeam();
+  });
   $('#team-form').addEventListener('submit', async event => {
     event.preventDefault();
     if (teamPending || !$('#team-form').reportValidity()) return;
     const payload = {city:$('#team-city').value,date:$('#team-date').value,event_format:$('#team-format').value,
-      budget_kzt:Number($('#team-budget').value),language:$('#team-language').value || null,
+      budget_kzt:Number($('#team-budget').value),language:$('#team-language').value || null,preferences:$('#team-preferences').value,
       roles:[...document.querySelectorAll('.team-role')].map(r => ({category:r.querySelector('.role-category').value,duration_hours:r.querySelector('.role-hours').value === '' ? null : Number(r.querySelector('.role-hours').value)}))};
     teamPending = true;
     $('#team-error').hidden = true; $('#team-dirty').hidden = true;
     $('#team-results').innerHTML = '<p role="status">Подбираем полную команду…</p>';
     $('#team-results').setAttribute('aria-busy','true');
-    $('#team-form').querySelectorAll('input,select,button').forEach(el => el.disabled = true);
+    $('#team-form').querySelectorAll('input,select,textarea,button').forEach(el => el.disabled = true);
     $('#copy-event').disabled = true;
+    document.dispatchEvent(new CustomEvent('eventmatch:team-busy', {detail:true}));
     try { const data = await post('/api/team',payload); renderTeam(data); teamHasResult = true; }
     catch (error) {$('#team-error').textContent = error.name === 'TimeoutError' ? 'Сервер отвечает слишком долго. Повторите подбор.' : error.message; $('#team-error').hidden = false; $('#team-results').innerHTML = '';}
-    finally {teamPending=false; $('#team-form').querySelectorAll('input,select,button').forEach(el => el.disabled=false);$('#copy-event').disabled=false;$('#team-results').setAttribute('aria-busy','false');updateRoleButtons();}
+    finally {teamPending=false; $('#team-form').querySelectorAll('input,select,textarea,button').forEach(el => el.disabled=false);$('#copy-event').disabled=false;$('#team-results').setAttribute('aria-busy','false');updateRoleButtons();document.dispatchEvent(new CustomEvent('eventmatch:team-busy', {detail:false}));}
   });
 }
 
@@ -245,4 +259,5 @@ function renderTeam(data) {
   $('#team-results').innerHTML = `<div class="team-result-heading"><h3>${esc(data.message)}</h3><p>${esc(data.request.city)} · ${esc(dateLabel(data.request.date))} · бюджет ${money(data.request.budget_kzt)}</p></div>${data.status === 'matched' ? `<div class="team-total"><div><small>Сумма цен «от»</small><strong>${money(data.total_from_kzt)}</strong></div><div><small>Остаток бюджета</small><strong>${money(data.remaining_kzt)}</strong></div></div><div class="saved-grid">${data.members.map(c => `<article class="saved-card"><p class="role-name">${esc(c.category)}</p><h3>${esc(c.name)}</h3><strong>от ${money(c.price_from_kzt)}</strong><p>${c.duration_hours == null ? 'Часы не ограничены запросом' : 'Нужно часов: ' + c.duration_hours}</p><p>${esc(c.languages.join(' · '))}</p>${c.warnings.length ? `<p class="data-warning">${c.warnings.map(esc).join(' ')}</p>` : ''}<details><summary>Описание</summary><p>${esc(c.description)}</p></details>${profileActions(c,{...data.request,category:c.category,duration_hours:c.duration_hours,sort_by:'price'})}</article>`).join('')}</div>` : `<ul>${data.roles.map(r => `<li>${esc(r.category)}: ${r.eligible_candidates} профилей по дате и условиям роли (до проверки общего бюджета).</li>`).join('')}</ul>${data.minimum_required_kzt != null ? `<p>Минимальная сумма полной команды: <strong>${money(data.minimum_required_kzt)}</strong>. Не хватает ${money(data.minimum_required_kzt-data.request.budget_kzt)}.</p><button class="secondary-button" id="apply-team-budget">Установить этот бюджет и подобрать</button>` : '<p>Попробуйте изменить дату, часы роли или язык. Один профиль нельзя назначить на две роли одновременно.</p>'}`}<p class="semantic-note">${esc(data.note)}</p>`;
   if ($('#apply-team-budget')) $('#apply-team-budget').onclick = () => {$('#team-budget').value=data.minimum_required_kzt;$('#team-form').requestSubmit();};
   syncButtons();
+  document.dispatchEvent(new CustomEvent('eventmatch:team-result', {detail:data}));
 }

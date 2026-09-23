@@ -10,6 +10,7 @@ const require = createRequire(import.meta.url);
 const {JSDOM} = require('../.tools/ui-test/node_modules/jsdom');
 const root = fileURLToPath(new URL('../', import.meta.url));
 const html = fs.readFileSync(new URL('../frontend/index.html', import.meta.url),'utf8');
+const plannerSource = fs.readFileSync(new URL('../frontend/planner.js', import.meta.url),'utf8');
 const featureSource = fs.readFileSync(new URL('../frontend/features.js', import.meta.url),'utf8').replaceAll('export function ','function ').replaceAll('export async function ','async function ');
 const appSource = fs.readFileSync(new URL('../frontend/app.js', import.meta.url),'utf8').replace(/^import .*?;\r?\n/, 'const {initFeatures,profileActions,preferenceDetails,updateCalendar,markCalendarDirty}=window.__features;\n');
 
@@ -53,6 +54,7 @@ test('single selection, wishes, calendar, favorites, comparison, compound sugges
       w.HTMLDialogElement.prototype.close=function(){this.removeAttribute('open');};
       w.addEventListener('error',e=>errors.push(e.error?.stack || e.message));
       if(storage)w.localStorage.setItem('eventmatch.favorites.v1',storage);
+      w.eval('(()=>{'+plannerSource+'})();');
       w.eval('(()=>{'+featureSource+';window.__features={initFeatures,profileActions,preferenceDetails,updateCalendar,markCalendarDirty};})();');
       w.eval('(()=>{'+appSource+'})();');
       return w;

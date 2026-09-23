@@ -61,7 +61,7 @@ function setBusy(busy) {
   document.querySelectorAll('.demo-button,.suggestion button').forEach(el => el.disabled = busy);
   output.setAttribute('aria-busy', String(busy));
   document.querySelectorAll('[data-calendar-date]').forEach(el => el.disabled = busy);
-  $('#submit-button').innerHTML = busy ? '<span>◌</span> Подбираем команду…' : '<span>✦</span> Подобрать подрядчиков <span>→</span>';
+  $('#submit-button').innerHTML = busy ? '<span>◌</span> Ищем подрядчиков…' : 'Подобрать подрядчиков <span>→</span>';
 }
 
 async function search({refreshSemantic = false} = {}) {
@@ -107,7 +107,7 @@ function card(candidate, index, request) {
     <div class="explanation-box"><h4><span>✦</span> Почему рекомендуем</h4><p>${esc(explanation)}</p></div>
     ${preferenceDetails(candidate)}
     ${profileActions(candidate, request)}
-    <div class="card-bottom"><span>${index === 0 ? 'Первый по оценке совпадения' : `№ ${index + 1} в вашей подборке`}</span><button class="detail-button" data-detail="${index}">Подробнее о совпадении <span>↗</span></button></div>
+    <div class="card-bottom"><span>${index === 0 ? (request.sort_by === 'price' ? 'Первый по стартовой цене' : 'Первый по оценке совпадения') : `№ ${index + 1} в вашей подборке`}</span><button class="detail-button" data-detail="${index}">Подробнее о совпадении <span>↗</span></button></div>
   </article>`;
 }
 
@@ -196,6 +196,7 @@ async function init() {
     fill(metadata.demos[0]?.request || {city:metadata.cities[0],category:metadata.categories[0],event_format:metadata.event_formats[0],date:metadata.calendar_start,budget_kzt:600000,duration_hours:null,language:null,preferences:'',sort_by:'style'});
     setBusy(false);
     initFeatures(metadata, {openDialog, showProfile, applyRequest: request => {if (pending) return; fill(request); document.querySelectorAll('.demo-button').forEach(el => el.classList.remove('selected')); search(); form.scrollIntoView({behavior:'smooth',block:'start'});}, readForm});
+    document.dispatchEvent(new CustomEvent('eventmatch:ready', {detail:metadata}));
     await search();
   } catch (error) {
     pending = false;

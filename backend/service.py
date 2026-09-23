@@ -8,12 +8,21 @@ from .explanations import explain
 from .relaxation import suggestions
 from .semantic import SemanticMatcher
 from .preferences import assess_preferences
+from .brief import BriefParser
 
 
 class RecommendationService:
-    def __init__(self, dataset=None, semantic=None):
+    def __init__(self, dataset=None, semantic=None, brief_parser=None):
         self.dataset = dataset or Dataset()
         self.semantic = semantic or SemanticMatcher(ROOT / ".cache", enabled=False)
+        self.brief_parser = brief_parser or BriefParser()
+
+    def brief(self, payload):
+        return self.brief_parser.parse(payload, self.dataset.metadata())
+
+    def plan(self, payload):
+        from .planning import plan_options
+        return plan_options(self.dataset, payload)
 
     def recommend(self, payload):
         event = EventRequest.parse(payload)

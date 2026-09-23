@@ -9,6 +9,7 @@ from .demos import build_demos
 from .models import ValidationError
 from .semantic import SemanticMatcher
 from .service import RecommendationService
+from .brief import BriefParser
 
 
 def load_env():
@@ -25,9 +26,12 @@ def make_server(host="127.0.0.1", port=8000, service=None):
     service = service or RecommendationService()
     metadata = service.dataset.metadata()
     metadata["demos"] = build_demos(service.dataset)
+    metadata["ai_brief_available"] = service.brief_parser.available
     static = {"/": ("index.html", "text/html"), "/styles.css": ("styles.css", "text/css"),
               "/app.js": ("app.js", "text/javascript"), "/features.js": ("features.js", "text/javascript"),
               "/features.css": ("features.css", "text/css"),
+              "/planner.js": ("planner.js", "text/javascript"),
+              "/studio.css": ("studio.css", "text/css"),
               "/favicon.svg": ("favicon.svg", "image/svg+xml")}
 
     class Handler(BaseHTTPRequestHandler):
@@ -65,7 +69,8 @@ def make_server(host="127.0.0.1", port=8000, service=None):
             return self.send(404, {"error": "Не найдено."})
 
         def do_POST(self):
-            routes = {"/api/recommend": service.recommend, "/api/calendar": service.calendar, "/api/team": service.team}
+            routes = {"/api/recommend": service.recommend, "/api/calendar": service.calendar, "/api/team": service.team,
+                      "/api/brief": service.brief, "/api/plan": service.plan}
             action = routes.get(urlsplit(self.path).path)
             if action is None:
                 return self.send(404, {"error": "Не найдено."})
@@ -102,7 +107,9 @@ def main():
     dataset = Dataset(os.getenv("DATASET_PATH", str(DEFAULT_DATASET)))
     semantic = SemanticMatcher(os.getenv("CACHE_DIR", str(ROOT / ".cache")),
                                enabled=os.getenv("ENABLE_EMBEDDINGS", "false").lower() == "true")
-    server = make_server(args.host, args.port, RecommendationService(dataset, semantic))
+    brief = BriefParser(enabled=os.getenv("ENABLE_AI_BRIEF", "false").lower() == "true",
+                        api_key=os.getenv("OPENAI_API_KEY", ""), model=os.getenv("BRIEF_MODEL", "gpt-4.1-mini"))
+    server = make_server(args.host, args.port, RecommendationService(dataset, semantic, brief))
     print(f"EventMatch: http://{args.host}:{server.server_port} | {len(dataset.contractors)} profiles", flush=True)
     try:
         server.serve_forever()
