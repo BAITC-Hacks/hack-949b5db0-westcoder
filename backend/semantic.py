@@ -44,6 +44,8 @@ def cached_decision(raw, candidates):
 
 
 def semantic_query(event):
+    if event.preferences:
+        return f"{event.category}. Формат: {event.event_format}. Пожелания: {event.preferences}"
     parts = [event.category, event.city, f"Формат: {event.event_format}",
              f"Бюджет: {event.budget_kzt} тенге", f"Дата: {event.date}"]
     if event.duration_hours is not None:

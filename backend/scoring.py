@@ -1,9 +1,8 @@
 """Explicit weights, no randomness and no hidden quality claims."""
 import re
-from .models import normalized, duration_not_applicable
+from .models import normalized
 
-WEIGHTS = {"budget": 35, "format": 25, "language": 15, "duration": 10,
-           "description": 15, "semantic": 15}
+WEIGHTS = {"budget": 20, "semantic": 80}
 
 
 def description_match(candidate, event):
@@ -24,15 +23,8 @@ def score(candidate, event, semantic=None):
     if price is None:
         raise ValueError("Scoring requires a candidate with a known price.")
     budget = (1 - price / event.budget_kzt) * 100 if event.budget_kzt else 100
-    components = {"budget": round(max(0, min(100, budget)), 4), "format": 100.0}
-    components["description"] = round(description_match(candidate, event)[0], 4)
-    if event.language is not None:
-        components["language"] = 100.0
-    if event.duration_hours is not None and not duration_not_applicable(candidate, event):
-        if candidate.max_hours is None or candidate.max_hours <= 0:
-            raise ValueError("Scoring requires a validated duration.")
-        components["duration"] = round(50 + 50 * (1 - event.duration_hours / candidate.max_hours), 4)
-    if semantic is not None:
+    components = {"budget": round(max(0, min(100, budget)), 4)}
+    if semantic is not None and event.sort_by != "price":
         components["semantic"] = round(max(0, min(1, semantic)) * 100, 4)
     denominator = sum(WEIGHTS[key] for key in components)
     total = round(sum(value * WEIGHTS[key] for key, value in components.items()) / denominator, 2)

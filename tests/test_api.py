@@ -1,6 +1,7 @@
 import json
 import threading
 import unittest
+from unittest.mock import Mock
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from backend.server import make_server
@@ -53,11 +54,37 @@ class ApiTests(unittest.TestCase):
     def test_only_frontend_files_are_public(self):
         for path in ('/.env','/data/contractors.csv','/backend/server.py','/../README.md','/.git/config'):
             self.assertEqual(self.request(path)[0],404)
-        for path in ('/','/app.js','/styles.css','/favicon.svg'):
+        for path in ('/','/app.js','/features.js','/styles.css','/features.css','/favicon.svg'):
             status, body, headers = self.request(path)
             self.assertEqual(status,200)
             self.assertGreater(len(body),0)
             self.assertIn("frame-ancestors 'none'",headers['Content-Security-Policy'])
+
+    def test_calendar_and_team_routes(self):
+        _,raw,_=self.request('/api/meta')
+        request=json.loads(raw)['demos'][0]['request']
+        status,raw,_=self.request('/api/calendar',request)
+        self.assertEqual(status,200)
+        self.assertEqual(len(json.loads(raw)['days']),100)
+        status,raw,_=self.request('/api/team',{**request,'budget_kzt':10000000,'roles':[{'category':'Фотограф'}]})
+        self.assertEqual(status,200)
+        result=json.loads(raw)
+        self.assertEqual(result['status'],'matched')
+        self.assertEqual(len(result['members']),1)
+        for path in ('/api/calendar','/api/team'):
+            self.assertEqual(self.request(path,{})[0],422)
+            self.assertEqual(self.request(path,b'{bad')[0],400)
+
+    def test_cancelled_request_does_not_send_a_second_error_response(self):
+        handler = object.__new__(self.server.RequestHandlerClass)
+        handler.send_response = Mock()
+        handler.send_header = Mock()
+        handler.end_headers = Mock()
+        handler.wfile = Mock()
+        handler.wfile.write.side_effect = ConnectionAbortedError('Client cancelled')
+        handler.send(200, {'days': []})
+        self.assertTrue(handler.close_connection)
+        handler.send_response.assert_called_once_with(200)
 
 
 if __name__ == '__main__':

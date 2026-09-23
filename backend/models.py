@@ -74,6 +74,8 @@ class EventRequest:
     budget_kzt: float
     duration_hours: float | None = None
     language: str | None = None
+    preferences: str = ""
+    sort_by: str = "style"
 
     @classmethod
     def parse(cls, payload):
@@ -110,6 +112,16 @@ class EventRequest:
             errors["language"] = "Язык должен быть строкой."
         else:
             values["language"] = language.strip() or None if language is not None else None
+        preferences = payload.get("preferences", "")
+        if not isinstance(preferences, str) or len(preferences) > 1500:
+            errors["preferences"] = "Опишите пожелания текстом до 1500 символов."
+        else:
+            values["preferences"] = preferences.strip()
+        sort_by = payload.get("sort_by", "style")
+        if sort_by not in ("price", "style"):
+            errors["sort_by"] = "Выберите сортировку price или style."
+        else:
+            values["sort_by"] = sort_by
         if errors:
             raise ValidationError(errors)
         return cls(**values)

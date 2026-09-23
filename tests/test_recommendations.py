@@ -134,12 +134,14 @@ class RecommendationTests(unittest.TestCase):
             self.assertEqual(sum(result["excluded_reasons"].values()) + result["eligible_candidates"], 66)
             self.assertEqual(len(result["excluded_candidates"]), sum(result["excluded_reasons"].values()))
 
-    def test_suggestions_are_real_and_change_only_one_field(self):
+    def test_suggestions_are_real_and_change_only_declared_fields(self):
         for demo in self.demos:
             original = demo["request"].copy()
             result = self.service.recommend(original)
             for suggestion in result["suggestions"]:
-                revised = {**original, suggestion["field"]:suggestion["value"]}
+                self.assertTrue(1 <= len(suggestion["changes"]) <= 3)
+                self.assertTrue(set(suggestion["changes"]) <= {"budget_kzt", "date", "language", "duration_hours"})
+                revised = {**original, **suggestion["changes"]}
                 count = len(hard_filter(self.dataset.contractors, EventRequest.parse(revised))[0])
                 self.assertEqual(count, suggestion["eligible_candidates"])
                 self.assertEqual(count - result["eligible_candidates"], suggestion["additional_candidates"])
@@ -220,12 +222,15 @@ class RecommendationTests(unittest.TestCase):
             self.assertTrue(candidate.duration_data_valid)
             self.assertEqual(failures(candidate,event), [])
 
-    def test_offline_ranking_uses_description_and_hour_headroom(self):
+    def test_ranking_without_preferences_uses_price_and_retains_description_evidence(self):
         relevant = replace(self.profile, description="Свадебный фотограф. Свадьбы и фотография.", max_hours=12)
         generic = replace(relevant, description="Оказываем услуги.")
         no_headroom = replace(relevant, max_hours=self.event.duration_hours)
-        self.assertGreater(score(relevant,self.event)[0], score(generic,self.event)[0])
-        self.assertGreater(score(relevant,self.event)[0], score(no_headroom,self.event)[0])
+        self.assertEqual(score(relevant,self.event)[0], score(generic,self.event)[0])
+        self.assertEqual(score(relevant,self.event)[0], score(no_headroom,self.event)[0])
+        from backend.scoring import description_match
+        self.assertTrue(description_match(relevant,self.event)[1])
+        self.assertFalse(description_match(generic,self.event)[1])
         self.assertNotIn("duration", score(relevant,replace(self.event,duration_hours=None))[1])
         florist = replace(relevant,categories=("Флорист",),max_hours=None)
         self.assertNotIn("duration",score(florist,replace(self.event,category="Флорист"))[1])

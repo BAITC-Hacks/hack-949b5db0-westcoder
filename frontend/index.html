@@ -7,6 +7,7 @@
   <title>EventMatch — подрядчики под ваше событие</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/features.css">
   <script type="module" src="/app.js"></script>
 </head>
 <body>
@@ -18,6 +19,8 @@
       <a class="nav-item active" href="#event-form"><span>✦</span> Умный подбор <small>AI</small></a>
       <button class="nav-item" id="about-data"><span>▦</span> О каталоге</button>
       <button class="nav-item" id="about-method"><span>◎</span> Как это работает</button>
+      <a class="nav-item" href="#team-panel"><span>♧</span> Собрать команду</a>
+      <a class="nav-item" href="#saved-panel"><span>♡</span> Избранное <small id="saved-count">0</small></a>
     </nav>
     <div class="sidebar-note"><span class="tiny-spark">✧</span><strong>Ваше событие.<br>Ваши люди.</strong><p>Находим совпадения.<br>Объясняем каждое.</p><span class="note-line"></span></div>
     <div class="sidebar-bottom"><span class="team-avatar">W</span><div><strong>WESTcoder</strong><small>HackAlem · 2026</small></div><span class="status-dot"></span></div>
@@ -37,7 +40,10 @@
             <label for="category">Кого ищем <span>*</span></label><select id="category" name="category" required disabled></select>
             <label for="budget_kzt">Бюджет на подрядчика <span>*</span></label><div class="input-unit"><input id="budget_kzt" name="budget_kzt" type="number" min="0" step="any" required placeholder="300 000" disabled><span>₸</span></div>
             <div class="optional-divider"><span>Дополнительно</span><small>необязательно</small></div>
-            <div class="form-row"><div><label for="duration_hours">Длительность</label><div class="input-unit"><input id="duration_hours" name="duration_hours" type="number" min="0" step="any" placeholder="Любая" disabled><span>ч</span></div></div><div><label for="language">Язык</label><select id="language" name="language" disabled></select></div></div>
+            <div class="form-row"><div><label for="duration_hours">Часы подрядчика</label><div class="input-unit"><input id="duration_hours" name="duration_hours" type="number" min="0" step="any" placeholder="Любые" disabled><span>ч</span></div></div><div><label for="language">Язык</label><select id="language" name="language" disabled></select></div></div>
+            <label for="preferences">Пожелания к стилю</label><textarea id="preferences" name="preferences" rows="3" maxlength="1500" placeholder="Живые эмоции, репортажная съёмка…" disabled></textarea>
+            <small class="field-note">Пожелания влияют на порядок, обязательные условия сохраняются.</small>
+            <label for="sort_by">Порядок результатов</label><select id="sort_by" name="sort_by" disabled><option value="style">По пожеланиям</option><option value="price">Сначала доступные</option></select>
             <div id="form-error" role="alert" hidden></div>
             <button class="primary-button" id="submit-button" type="submit" disabled><span>✦</span> Подобрать подрядчиков <span>→</span></button>
             <p class="form-footnote">Только ваш каталог. Только подходящие варианты.</p>
@@ -46,9 +52,30 @@
         <section class="results-panel" aria-label="Результаты подбора">
           <div class="demo-strip"><span>Попробуйте демо</span><div id="demo-buttons"></div></div>
           <div id="dirty-notice" class="notice" hidden>Параметры изменены. Нажмите «Подобрать подрядчиков», чтобы обновить результаты.</div>
+          <details class="panel calendar-panel" id="calendar-panel" hidden><summary>Календарь подходящих дат</summary><div id="calendar-content"></div></details>
           <div id="results" aria-live="polite" aria-busy="true"><div class="loading-card panel"><span class="loader"></span><h2>Загружаем ваш каталог</h2><p>Готовим параметры и демо-сценарии.</p></div></div>
         </section>
       </div>
+      <section class="panel feature-section" id="team-panel" aria-labelledby="team-title">
+        <div class="section-heading"><div><div class="eyebrow">ВСЕ НА ОДНУ ДАТУ</div><h2 id="team-title">Соберите команду</h2></div><button type="button" class="secondary-button" id="copy-event" disabled>Взять параметры мероприятия</button></div>
+        <p class="section-description">Выберите до пяти ролей. Найдём полную команду с минимальной суммой стартовых цен в вашем бюджете. Для каждой роли — отдельный подрядчик.</p>
+        <form id="team-form">
+          <div class="team-fields"><div><label for="team-city">Город</label><select id="team-city" required disabled></select></div><div><label for="team-date">Дата</label><input id="team-date" type="date" required disabled></div><div><label for="team-format">Формат</label><select id="team-format" required disabled></select></div><div><label for="team-budget">Общий бюджет, ₸</label><input id="team-budget" type="number" min="0" step="any" value="2000000" required disabled></div><div><label for="team-language">Язык</label><select id="team-language" disabled></select></div></div>
+          <div class="team-role-heading"><h3>Роли и часы работы</h3><span>Оставьте часы пустыми, если пока не определились.</span></div>
+          <div id="team-roles"></div>
+          <button type="button" id="add-role" class="secondary-button" disabled>+ Добавить роль</button>
+          <p id="team-error" class="notice" role="alert" hidden></p>
+          <button type="submit" class="primary-button" id="team-submit" disabled>Подобрать команду →</button>
+        </form>
+        <p id="team-dirty" class="notice" hidden>Условия команды изменены. Выполните подбор заново.</p>
+        <div id="team-results" aria-live="polite"></div>
+      </section>
+      <section class="panel feature-section" id="saved-panel" aria-labelledby="saved-title">
+        <div class="section-heading"><div><div class="eyebrow">ВАШ КОРОТКИЙ СПИСОК</div><h2 id="saved-title">Избранное и сравнение</h2></div><button class="secondary-button" id="compare-button" disabled>Сравнить (0/4)</button></div>
+        <p class="section-description">Сохраняйте профили и сравнивайте до четырёх вариантов. Избранное хранится в этом браузере; доступность относится к дате сохранённого запроса.</p>
+        <p id="storage-notice" class="notice" role="status" hidden></p><div id="saved-profiles"></div>
+      </section>
+      <div id="comparison-bar" class="comparison-bar" hidden><span id="comparison-status"></span><button type="button" id="open-comparison">Сравнить</button><button type="button" id="clear-comparison">Сбросить</button></div>
       <footer><span><span class="footer-spark">✦</span> eventmatch · Сделано командой WESTcoder</span><span>Осмысленный выбор для важных событий</span></footer>
     </main>
   </div>
