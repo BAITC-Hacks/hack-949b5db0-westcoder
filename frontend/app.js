@@ -6,8 +6,8 @@ const money = (value) => new Intl.NumberFormat('ru-RU', {maximumFractionDigits: 
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const dateLabel = (value) => new Date(value + 'T12:00:00').toLocaleDateString('ru-RU', {day:'numeric',month:'long'});
 const capitalize = (value) => value.charAt(0).toUpperCase() + value.slice(1);
-const labels = {wrong_city:'другой город',wrong_category:'другая категория',busy:'заняты на дату',availability_unknown:'нет достоверного календаря',wrong_format:'не поддерживают формат',over_budget:'выше бюджета',price_unknown:'нет цены',too_short:'не хватает часов',duration_unknown:'не указана длительность',wrong_language:'нет нужного языка'};
-const scoreLabels = {budget:'Запас бюджета',format:'Формат',language:'Язык',duration:'Длительность',semantic:'Сходство описания'};
+const labels = {wrong_city:'другой город',wrong_category:'другая категория',busy:'заняты на дату',availability_unknown:'нет достоверного календаря',wrong_format:'не поддерживают формат',over_budget:'выше бюджета',price_unknown:'нет цены',too_short:'не хватает часов',duration_unknown:'не указана длительность',duration_invalid:'ошибка в данных длительности',wrong_language:'нет нужного языка'};
+const scoreLabels = {budget:'Запас бюджета',format:'Формат',language:'Язык',duration:'Запас часов',description:'Слова в описании',semantic:'Сходство описания (AI)'};
 const stageLabels = {initial:'В каталоге',city:'Город',category:'Категория',available:'Дата',format:'Формат',budget:'Бюджет',duration:'Часы',language:'Язык',recommended:'Топ-3'};
 let metadata;
 let result;
@@ -62,10 +62,11 @@ function setBusy(busy) {
   $('#submit-button').innerHTML = busy ? '<span>◌</span> Подбираем команду…' : '<span>✦</span> Подобрать подрядчиков <span>→</span>';
 }
 
-async function search() {
+async function search({refreshSemantic = false} = {}) {
   validateDuration();
   if (pending || !form.reportValidity()) return;
   const payload = readForm();
+  if (refreshSemantic) payload.refresh_semantic = true;
   setBusy(true);
   $('#form-error').hidden = true;
   $('#dirty-notice').hidden = true;
@@ -92,10 +93,8 @@ function warningTags(candidate) {
 
 function card(candidate, index, request) {
   const initials = candidate.name.split(/\s+/).slice(0,2).map(x => x[0]).join('');
-  const saving = request.budget_kzt - candidate.price_from_kzt;
-  const excerpt = candidate.description.length > 145 ? candidate.description.slice(0,145).replace(/\s+\S*$/, '') + '…' : candidate.description;
-  const explanation = `Цена от ${money(candidate.price_from_kzt)} оставляет ${money(saving)} в бюджете. ${excerpt ? 'Из профиля: «' + excerpt + '»' : 'Профиль поддерживает выбранный формат и доступен по календарю.'}`;
-  const hours = candidate.max_hours !== null ? 'До ' + candidate.max_hours + ' ч' : ['Флорист','Декоратор','Подарки и сувениры'].includes(request.category) ? 'Без почасового присутствия' : 'Длительность не указана';
+  const explanation = candidate.explanation;
+  const hours = !candidate.duration_data_valid ? 'Ошибка в данных длительности' : candidate.max_hours !== null ? 'До ' + candidate.max_hours + ' ч' : ['Флорист','Декоратор','Подарки и сувениры'].includes(request.category) ? 'Без почасового присутствия' : 'Длительность не указана';
   return `<article class="candidate-card panel">
     <div class="card-top"><div class="avatar tone-${index}">${esc(initials)}</div><div class="candidate-name"><h3>${esc(candidate.name)}</h3><div class="candidate-meta">${esc(candidate.category)} <span>·</span> ${esc(candidate.city)}</div></div><div class="score"><strong>${candidate.score.toLocaleString('ru-RU')}<span>%</span></strong><small>совпадение</small></div></div>
     <div class="match-row"><div class="price"><small>от</small> ${money(candidate.price_from_kzt)}${candidate.price_imputed ? '<small>*</small>' : ''}</div><span class="available">✓ ${esc(dateLabel(request.date))} · нет занятости</span></div>
@@ -130,7 +129,12 @@ function render(data) {
     ${!empty && data.recommendations.length < 3 ? '<p class="notice">Подходящих профилей меньше трёх. Остальные исключены по причинам ниже.</p>' : ''}
     ${funnel(data)}
     ${data.suggestions.length ? `<section class="suggestions-panel"><h3>✧ Что изменить, чтобы получить больше вариантов?</h3><p>Условия изменятся только после нажатия на кнопку.</p>${data.suggestions.map((s,i) => `<div class="suggestion"><span>${esc(s.text)}</span><button data-suggestion="${i}">Применить и подобрать ↗</button></div>`).join('')}</section>` : ''}
-    <p class="semantic-note">${data.semantic_mode === 'embeddings' ? '✦ В оценке учтено сходство описаний с вашим запросом (embeddings).' : '◎ Подбор по явным условиям. Семантический анализ ' + (data.semantic_mode === 'disabled' ? 'отключён' : data.semantic_mode === 'not_needed' ? 'не нужен: нет кандидатов для сравнения' : 'недоступен; его вес исключён из оценки') + '.'} Процент — оценка соответствия, а не гарантия качества. Цена «от» и доступность требуют подтверждения.</p>`;
+    <p class="semantic-note">${data.semantic_mode === 'embeddings' ? '✦ В оценке учтено сходство описаний с вашим запросом (embeddings).' : '◎ Подбор по явным условиям, запасу часов и словам в описании. Семантический анализ ' + (data.semantic_mode === 'disabled' ? 'отключён' : data.semantic_mode === 'not_needed' ? 'не нужен: нет кандидатов для сравнения' : 'недоступен; его вес исключён из оценки') + '.'} Процент — оценка соответствия, а не гарантия качества. Цена «от» и доступность требуют подтверждения.</p>
+    ${data.semantic_retry_allowed ? '<div class="notice">Можно повторить AI-анализ после сбоя. При успехе оценка и порядок карточек могут измениться.<br><button type="button" class="retry-button" id="retry-semantic">Повторить AI-анализ</button></div>' : ''}`;
+  $('#retry-semantic')?.addEventListener('click', () => {
+    fill(data.request);
+    search({refreshSemantic: true});
+  });
   output.querySelectorAll('[data-detail]').forEach(button => button.addEventListener('click', () => showProfile(data.recommendations[Number(button.dataset.detail)])));
   output.querySelectorAll('[data-suggestion]').forEach(button => button.addEventListener('click', () => {
     const suggestion = data.suggestions[Number(button.dataset.suggestion)];
@@ -147,10 +151,10 @@ function openDialog(label, html) {
 }
 
 function showProfile(candidate) {
-  openDialog(candidate.id, `<h2>${esc(candidate.name)}</h2><p>${esc(candidate.categories.join(' · '))} · ${esc(candidate.city)} · от ${money(candidate.price_from_kzt)}</p>${warningTags(candidate)}<h3>Почему этот профиль в подборке</h3><ul>${candidate.reasons.map(r => `<li>${esc(r)}</li>`).join('')}</ul><h3>Описание из датасета</h3><p class="profile-description">${esc(candidate.description || 'Описание не указано.')}</p><p>Форматы: ${esc(candidate.event_formats.join(', '))}.<br>Языки: ${esc(candidate.languages.join(', ') || 'не указаны')}.</p><h3>Из чего складывается оценка ${candidate.score}%</h3><p>Больший запас бюджета даёт больший балл. Проверенные условия получают 100. Неуказанные параметры исключаются из весов.</p><table><thead><tr><th>Фактор</th><th>Балл / 100</th><th>Вес</th></tr></thead><tbody>${Object.entries(candidate.score_breakdown).map(([key,s]) => `<tr><td>${scoreLabels[key]}</td><td>${s.value.toFixed(2)}</td><td>${s.weight.toFixed(2)}%</td></tr>`).join('')}</tbody></table>${candidate.warnings.length ? `<h3>Особенности данных</h3><ul>${candidate.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}<p>Наличие в подборке не означает бронирование. Свободная дата означает отсутствие записи о занятости в приложенном календаре.</p>`);
+  openDialog(candidate.id, `<h2>${esc(candidate.name)}</h2><p>${esc(candidate.categories.join(' · '))} · ${esc(candidate.city)} · от ${money(candidate.price_from_kzt)}</p>${warningTags(candidate)}<h3>Почему этот профиль в подборке</h3><ul>${candidate.reasons.map(r => `<li>${esc(r)}</li>`).join('')}</ul><h3>Описание из датасета</h3><p class="profile-description">${esc(candidate.description || 'Описание не указано.')}</p><p>Форматы: ${esc(candidate.event_formats.join(', '))}.<br>Языки: ${esc(candidate.languages.join(', ') || 'не указаны')}.</p><h3>Из чего складывается оценка ${candidate.score}%</h3><p>Оценка учитывает запас бюджета и часов, слова из категории и формата в описании. Совпадения слов определяются по первым четырём буквам; это не оценка качества. Формат и выбранный язык после фильтра получают 100. Неактивные факторы исключаются из весов.</p><table><thead><tr><th>Фактор</th><th>Балл / 100</th><th>Вес</th></tr></thead><tbody>${Object.entries(candidate.score_breakdown).map(([key,s]) => `<tr><td>${scoreLabels[key]}</td><td>${s.value.toFixed(2)}</td><td>${s.weight.toFixed(2)}%</td></tr>`).join('')}</tbody></table>${candidate.warnings.length ? `<h3>Особенности данных</h3><ul>${candidate.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}<p>Наличие в подборке не означает бронирование. Свободная дата означает отсутствие записи о занятости в приложенном календаре.</p>`);
 }
 
-$('#about-method').addEventListener('click', () => openDialog('КАК ЭТО РАБОТАЕТ', '<h2>Каждое совпадение объяснимо.</h2><ol><li>Берём профили только из приложенного каталога.</li><li>Проверяем город, категорию, занятость, формат, бюджет, часы и язык.</li><li>Оцениваем прошедших кандидатов: запас бюджета — вес 35, формат — 25, язык — 15, длительность — 10, сходство описания — 15. Неактивные факторы исключаем, веса нормируем.</li><li>Сортируем по оценке. При равенстве — по ID. Показываем до трёх профилей.</li><li>Объясняем факты и предлагаем конкретные изменения условий, которые увеличат число вариантов.</li></ol><p>Embeddings — опциональный анализ смысла описания. Без него подбор работает по явным условиям. Объяснения составляются из фактов датасета; новые качества и цены не придумываются.</p>'));
+$('#about-method').addEventListener('click', () => openDialog('КАК ЭТО РАБОТАЕТ', '<h2>Каждое совпадение объяснимо.</h2><ol><li>Берём профили только из приложенного каталога.</li><li>Проверяем город, категорию, занятость, формат, бюджет, часы и язык.</li><li>Веса оценки: запас бюджета — 35, формат — 25, язык — 15, запас часов — 10, слова в описании — 15, семантика AI — 15. Неактивные факторы исключаем, веса нормируем.</li><li>Сортируем по оценке. При равенстве — по ID. Показываем до трёх профилей.</li><li>Объясняем факты и предлагаем конкретные изменения условий, которые увеличат число вариантов.</li></ol><p>Embeddings — опциональный анализ смысла описания. Без него сравниваем бюджет, запас часов и совпадения слов. После сбоя можно отдельно повторить AI-анализ. Обычный повтор сохраняет предыдущую оценку. Объяснения составляются из фактов датасета.</p>'));
 $('#about-data').addEventListener('click', () => {
   if (!metadata) return;
   openDialog('ВАШ КАТАЛОГ', `<h2>Ваш каталог. Понятный выбор.</h2><div class="data-stats"><div><strong>${metadata.total}</strong><small>профилей</small></div><div><strong>${metadata.categories.length}</strong><small>категорий</small></div><div><strong>${metadata.cities.length}</strong><small>локации</small></div></div><p>Источник — загруженный каталог. Новые профили не добавлялись.</p><p>Города: ${esc(metadata.cities.join(', '))}.<br>Календарь: ${esc(metadata.calendar_start)} — ${esc(metadata.calendar_end)}.</p><p>Синтетических профилей: ${metadata.synthetic}. Город проставлен: ${metadata.city_imputed}. Цена проставлена: ${metadata.price_imputed}.</p><p>Для флористов, декораторов и сувениров пустой лимит часов означает работу без почасового присутствия. В других категориях неизвестный лимит не подтверждает длительность.</p>`);

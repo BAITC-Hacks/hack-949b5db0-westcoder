@@ -2,6 +2,8 @@ from dataclasses import asdict, replace
 import tempfile
 import json
 import sqlite3
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 import unittest
 from unittest.mock import patch
@@ -94,6 +96,75 @@ class SemanticTests(unittest.TestCase):
         with patch.object(self.matcher,"_embed",side_effect=AssertionError("Must never run")):
             result = RecommendationService(dataset,self.matcher).recommend(asdict(self.event))
             self.assertEqual(result["recommendations"],[])
+
+    def test_explicit_retry_recovers_failure_and_then_stays_cached(self):
+        service = RecommendationService(self.dataset,self.matcher)
+        with patch.object(self.matcher,"_embed",side_effect=TimeoutError):
+            failed = service.recommend(asdict(self.event))
+        self.assertTrue(failed["semantic_retry_allowed"])
+        with patch.object(self.matcher,"_embed",side_effect=lambda texts:[[1.,1.] for _ in texts]) as embed:
+            # Ordinary repeat stays deterministic even when the provider recovers.
+            self.assertEqual(failed,service.recommend(asdict(self.event)))
+            self.assertEqual(embed.call_count,0)
+            recovered = service.recommend({**asdict(self.event),"refresh_semantic":True})
+            self.assertEqual(recovered["semantic_mode"],"embeddings")
+            self.assertFalse(recovered["semantic_retry_allowed"])
+            self.assertEqual(recovered,service.recommend(asdict(self.event)))
+            self.assertEqual(recovered,service.recommend({**asdict(self.event),"refresh_semantic":True}))
+            self.assertEqual(embed.call_count,1)
+
+    def test_slow_query_does_not_block_cached_or_unrelated_requests(self):
+        warm = replace(self.event,budget_kzt=650000)
+        other = replace(self.event,budget_kzt=700000)
+        def vectors(texts): return [[1.,1.] for _ in texts]
+        with patch.object(self.matcher,"_embed",side_effect=vectors):
+            expected = self.matcher.similarities(warm,self.candidates,self.dataset.fingerprint)
+        entered, release = threading.Event(), threading.Event()
+        def slow(texts):
+            if any(f"Бюджет: {self.event.budget_kzt} тенге" in text for text in texts):
+                entered.set()
+                if not release.wait(5):
+                    raise TimeoutError("Test barrier timed out")
+            return vectors(texts)
+        with patch.object(self.matcher,"_embed",side_effect=slow),ThreadPoolExecutor(max_workers=3) as pool:
+            cold = pool.submit(self.matcher.similarities,self.event,self.candidates,self.dataset.fingerprint)
+            try:
+                self.assertTrue(entered.wait(2))
+                cached = pool.submit(self.matcher.similarities,warm,self.candidates,self.dataset.fingerprint)
+                self.assertEqual(cached.result(timeout=2),expected)
+                independent = pool.submit(self.matcher.similarities,other,self.candidates,self.dataset.fingerprint)
+                self.assertEqual(independent.result(timeout=2)[1],"embeddings")
+                self.assertFalse(cold.done())
+            finally:
+                release.set()
+            self.assertEqual(cold.result(timeout=2)[1],"embeddings")
+        self.assertEqual(self.matcher._requests,{})
+
+    def test_identical_parallel_requests_share_one_provider_call(self):
+        entered, release = threading.Event(), threading.Event()
+        def slow(texts):
+            entered.set()
+            if not release.wait(5): raise TimeoutError()
+            return [[1.,1.] for _ in texts]
+        with patch.object(self.matcher,"_embed",side_effect=slow) as embed,ThreadPoolExecutor(max_workers=2) as pool:
+            first = pool.submit(self.matcher.similarities,self.event,self.candidates,self.dataset.fingerprint)
+            try:
+                self.assertTrue(entered.wait(2))
+                second = pool.submit(self.matcher.similarities,self.event,self.candidates,self.dataset.fingerprint)
+            finally:
+                release.set()
+            self.assertEqual(first.result(timeout=2),second.result(timeout=2))
+            self.assertEqual(embed.call_count,1)
+        self.assertEqual(self.matcher._requests,{})
+
+    def test_refresh_repairs_corrupt_decision_without_new_api_call(self):
+        with patch.object(self.matcher,"_embed",side_effect=lambda texts:[[1.,1.] for _ in texts]) as embed:
+            expected = self.matcher.similarities(self.event,self.candidates,self.dataset.fingerprint)
+            with closing(sqlite3.connect(self.matcher.cache_dir / "embeddings.sqlite3")) as db,db:
+                db.execute("UPDATE decisions SET value='{}'")
+            self.assertEqual(self.matcher.similarities(self.event,self.candidates,self.dataset.fingerprint)[1],"cache_unavailable")
+            self.assertEqual(self.matcher.similarities(self.event,self.candidates,self.dataset.fingerprint,refresh=True),expected)
+            self.assertEqual(embed.call_count,1)
 
 
 if __name__ == "__main__":

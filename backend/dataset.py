@@ -34,29 +34,37 @@ def flag(value):
 
 
 def normalize(row):
-    busy = items(row.get("busy_dates"))
-    known = "busy_dates" in row and row["busy_dates"] is not None
-    if not isinstance(row.get("busy_dates"), (str, list, tuple)):
-        known = False
-    if isinstance(row.get("busy_dates"), (list, tuple)) and any(
-        not isinstance(value, str) or not value.strip() for value in row["busy_dates"]
-    ):
-        known = False
+    raw_busy = row.get("busy_dates")
+    # Only an explicitly empty string/list means an empty calendar. Do not drop
+    # empty elements from a nonempty calendar before validating its structure.
+    if isinstance(raw_busy, str):
+        parts = raw_busy.split("|") if raw_busy.strip() else []
+    elif isinstance(raw_busy, (list, tuple)):
+        parts = raw_busy
+    else:
+        parts = None
+    known = parts is not None and all(isinstance(v, str) and bool(v.strip()) for v in parts)
+    busy = items(raw_busy)
     try:
         for day in busy:
             iso_date(day)
     except ValueError:
         known = False
+    raw_hours = row.get("max_hours")
+    hours = number(raw_hours)
+    explicitly_empty = "max_hours" in row and (raw_hours is None or isinstance(raw_hours, str) and not raw_hours.strip())
+    duration_valid = explicitly_empty or hours is not None
     return Contractor(
         id=str(row.get("id") or "").strip(),
         anon_name=str(row.get("anon_name") or row.get("id") or "Без имени").strip(),
         categories=items(row.get("categories")), city=str(row.get("city") or "").strip(),
         price_from_kzt=number(row.get("price_from_kzt")),
         event_formats=items(row.get("event_formats")), languages=items(row.get("languages")),
-        max_hours=number(row.get("max_hours")), busy_dates=busy,
+        max_hours=hours, busy_dates=busy,
         description=str(row.get("description") or "").strip(),
         synthetic=flag(row.get("synthetic")), city_imputed=flag(row.get("city_imputed")),
         price_imputed=flag(row.get("price_imputed")), availability_known=known,
+        duration_data_valid=duration_valid,
     )
 
 

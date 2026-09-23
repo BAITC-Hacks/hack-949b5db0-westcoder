@@ -193,6 +193,48 @@ class RecommendationTests(unittest.TestCase):
         self.assertEqual(money(1234.5), "1 234,5 ₸")
         self.assertEqual(money(1234), "1 234 ₸")
 
+    def test_malformed_calendar_is_not_an_empty_calendar(self):
+        for raw in ("|", "||", " | ", "2026-10-01|", "|2026-10-01", [""], [None], True):
+            with self.subTest(raw=raw):
+                candidate = normalize({**asdict(self.profile), "busy_dates": raw})
+                self.assertFalse(candidate.availability_known)
+                self.assertIn(("available", "availability_unknown"), failures(candidate, self.event))
+        for raw in ("", "  ", [], ()):
+            with self.subTest(empty=raw):
+                candidate = normalize({**asdict(self.profile), "busy_dates": raw})
+                self.assertTrue(candidate.availability_known)
+                self.assertEqual(candidate.busy_dates, ())
+
+    def test_invalid_hours_do_not_become_unlimited_for_florists(self):
+        event = replace(self.event, category="Флорист")
+        row = {**asdict(self.profile), "categories":["Флорист"]}
+        for raw in (-1, "broken", True, float('inf'), float('nan'), {}):
+            with self.subTest(raw=raw):
+                candidate = normalize({**row, "max_hours":raw})
+                self.assertFalse(candidate.duration_data_valid)
+                self.assertIn(("duration", "duration_invalid"), failures(candidate, event))
+        del row["max_hours"]
+        self.assertFalse(normalize(row).duration_data_valid)
+        for raw in (None, "", " "):
+            candidate = normalize({**row, "max_hours":raw})
+            self.assertTrue(candidate.duration_data_valid)
+            self.assertEqual(failures(candidate,event), [])
+
+    def test_offline_ranking_uses_description_and_hour_headroom(self):
+        relevant = replace(self.profile, description="Свадебный фотограф. Свадьбы и фотография.", max_hours=12)
+        generic = replace(relevant, description="Оказываем услуги.")
+        no_headroom = replace(relevant, max_hours=self.event.duration_hours)
+        self.assertGreater(score(relevant,self.event)[0], score(generic,self.event)[0])
+        self.assertGreater(score(relevant,self.event)[0], score(no_headroom,self.event)[0])
+        self.assertNotIn("duration", score(relevant,replace(self.event,duration_hours=None))[1])
+        florist = replace(relevant,categories=("Флорист",),max_hours=None)
+        self.assertNotIn("duration",score(florist,replace(self.event,category="Флорист"))[1])
+
+    def test_refresh_flag_is_validated(self):
+        for value in ("true", 1, None, []):
+            with self.subTest(value=value), self.assertRaises(ValidationError):
+                EventRequest.parse({**asdict(self.event),"refresh_semantic":value})
+
 
 if __name__ == "__main__":
     unittest.main()

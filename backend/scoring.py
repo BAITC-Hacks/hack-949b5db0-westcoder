@@ -1,15 +1,37 @@
 """Explicit weights, no randomness and no hidden quality claims."""
-WEIGHTS = {"budget": 35, "format": 25, "language": 15, "duration": 10, "semantic": 15}
+import re
+from .models import normalized, duration_not_applicable
+
+WEIGHTS = {"budget": 35, "format": 25, "language": 15, "duration": 10,
+           "description": 15, "semantic": 15}
+
+
+def description_match(candidate, event):
+    # Transparent lexical overlap, not an embedding or a quality/reputation claim.
+    # Four-letter prefixes match common inflections: свадьба / свадебный.
+    def terms(text):
+        return {word[:4] for word in re.findall(r"[^\W\d_]+", normalized(text)) if len(word) >= 3}
+    query = terms(f"{event.category} {event.event_format}")
+    matches = query & terms(candidate.description)
+    words = re.findall(r"[^\W\d_]+", normalized(candidate.description))
+    examples = [next(word for word in words if word[:4] == prefix) for prefix in sorted(matches)]
+    return (100 * len(matches) / len(query) if query else 0), examples
 
 
 def score(candidate, event, semantic=None):
     # Entry prices are not quotes. Budget score measures remaining headroom only.
-    budget = (1 - candidate.price_from_kzt / event.budget_kzt) * 100 if event.budget_kzt else 100
+    price = candidate.price_from_kzt
+    if price is None:
+        raise ValueError("Scoring requires a candidate with a known price.")
+    budget = (1 - price / event.budget_kzt) * 100 if event.budget_kzt else 100
     components = {"budget": round(max(0, min(100, budget)), 4), "format": 100.0}
+    components["description"] = round(description_match(candidate, event)[0], 4)
     if event.language is not None:
         components["language"] = 100.0
-    if event.duration_hours is not None:
-        components["duration"] = 100.0
+    if event.duration_hours is not None and not duration_not_applicable(candidate, event):
+        if candidate.max_hours is None or candidate.max_hours <= 0:
+            raise ValueError("Scoring requires a validated duration.")
+        components["duration"] = round(50 + 50 * (1 - event.duration_hours / candidate.max_hours), 4)
     if semantic is not None:
         components["semantic"] = round(max(0, min(1, semantic)) * 100, 4)
     denominator = sum(WEIGHTS[key] for key in components)

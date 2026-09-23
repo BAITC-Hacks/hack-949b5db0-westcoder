@@ -24,8 +24,13 @@ def run():
         page.screenshot(path=str(artifacts / "desktop.png"),full_page=True)
         page.locator("[data-detail='0']").click()
         assert page.locator("dialog").is_visible()
-        assert page.locator("dialog table tbody tr").count() == 4
+        assert page.locator("dialog table tbody tr").count() == 5
         page.keyboard.press("Escape")
+        # Cards must display the backend explanation, including date and duration.
+        initial = page.request.get('http://127.0.0.1:8000/api/meta').json()
+        expected = page.request.post('http://127.0.0.1:8000/api/recommend',data=initial['demos'][0]['request']).json()
+        for index,candidate in enumerate(expected['recommendations']):
+            expect(page.locator('.explanation-box p').nth(index)).to_have_text(candidate['explanation'])
         page.locator("[data-demo='1']").click()
         expect(page.locator('#results')).to_have_attribute('aria-busy', 'false')
         assert page.locator(".candidate-card").count() == 2
@@ -90,6 +95,25 @@ def run():
         startup.locator('#retry-init').click()
         expect(startup.locator('.candidate-card')).to_have_count(3)
         startup.close()
+        # UI wiring for an explicit retry. Provider recovery is covered by backend tests.
+        retried = []
+        def transient_semantics(route):
+            response = route.fetch()
+            data = response.json()
+            is_retry = route.request.post_data_json.get('refresh_semantic',False)
+            retried.append(is_retry)
+            if not is_retry:
+                data['semantic_mode'] = 'unavailable'
+                data['semantic_retry_allowed'] = True
+            route.fulfill(response=response,json=data)
+        page.route('**/api/recommend',transient_semantics)
+        page.locator('#submit-button').click()
+        expect(page.locator('#retry-semantic')).to_be_visible()
+        page.locator('#retry-semantic').click()
+        expect(page.locator('#retry-semantic')).to_have_count(0)
+        expect(page.locator('#results')).to_have_attribute('aria-busy','false')
+        assert retried == [False,True]
+        page.unroute('**/api/recommend')
         assert not errors, errors
         browser.close()
     print(json.dumps({"browser":"Chrome","scenarios":4,"network_recovery":True,"fractional_inputs":True,"desktop":"1440x1050","mobile":"390x844","js_errors":errors,"status":"passed"}))

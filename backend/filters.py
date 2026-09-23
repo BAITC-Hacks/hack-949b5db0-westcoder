@@ -13,9 +13,10 @@ def failures(candidate, event):
         ("format", "wrong_format", contains(candidate.event_formats, event.event_format)),
         ("budget", "price_unknown" if candidate.price_from_kzt is None else "over_budget",
          candidate.price_from_kzt is not None and candidate.price_from_kzt <= event.budget_kzt),
-        ("duration", "duration_unknown" if candidate.max_hours is None else "too_short",
-         event.duration_hours is None or duration_not_applicable(candidate, event)
-         or (candidate.max_hours is not None and candidate.max_hours >= event.duration_hours)),
+        ("duration", "duration_invalid" if not candidate.duration_data_valid else "duration_unknown" if candidate.max_hours is None else "too_short",
+         event.duration_hours is None or candidate.duration_data_valid and (
+             duration_not_applicable(candidate, event)
+             or candidate.max_hours is not None and candidate.max_hours >= event.duration_hours)),
         ("language", "wrong_language", event.language is None or contains(candidate.languages, event.language)),
     ]
     return [(stage, reason) for stage, reason, passed in checks if not passed]

@@ -30,7 +30,7 @@ def finite_number(value):
 
 def duration_not_applicable(candidate, event):
     # The supplied PDF defines null for deliverables without hourly presence.
-    return candidate.max_hours is None and contains(
+    return candidate.duration_data_valid and candidate.max_hours is None and contains(
         ("Флорист", "Декоратор", "Подарки и сувениры"), event.category)
 
 
@@ -62,6 +62,7 @@ class Contractor:
     city_imputed: bool
     price_imputed: bool
     availability_known: bool = True
+    duration_data_valid: bool = True
 
 
 @dataclass(frozen=True)
@@ -79,6 +80,8 @@ class EventRequest:
         if not isinstance(payload, dict):
             raise ValidationError({"request": "Ожидается JSON-объект."})
         errors, values = {}, {}
+        if "refresh_semantic" in payload and not isinstance(payload["refresh_semantic"], bool):
+            errors["refresh_semantic"] = "Ожидается true или false."
         for key in ("city", "date", "event_format", "category"):
             value = payload.get(key)
             if not isinstance(value, str) or not value.strip() or len(value) > 150:

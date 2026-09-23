@@ -16,7 +16,8 @@ class RecommendationService:
     def recommend(self, payload):
         event = EventRequest.parse(payload)
         eligible, stats, excluded, details = hard_filter(self.dataset.contractors, event)
-        similarities, mode = self.semantic.similarities(event, eligible, self.dataset.fingerprint)
+        similarities, mode = self.semantic.similarities(event, eligible, self.dataset.fingerprint,
+                                                      refresh=payload.get("refresh_semantic", False))
         ranked = []
         for candidate in eligible:
             value, breakdown = score(candidate, event, similarities.get(candidate.id) if similarities is not None else None)
@@ -42,4 +43,5 @@ class RecommendationService:
                 "recommendations": recommendations, "filter_stats": stats,
                 "excluded_reasons": excluded, "excluded_candidates": details,
                 "suggestions": suggestions(self.dataset.contractors, event, eligible),
-                "semantic_mode": mode, "dataset_sha256": self.dataset.fingerprint}
+                "semantic_mode": mode, "semantic_retry_allowed": mode in ("unavailable", "cache_unavailable"),
+                "dataset_sha256": self.dataset.fingerprint}

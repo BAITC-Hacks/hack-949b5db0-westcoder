@@ -1,6 +1,6 @@
 """Optional real embeddings, persistent cache and explicit offline fallback."""
 import hashlib
-from contextlib import closing
+from contextlib import contextmanager
 from dataclasses import asdict
 import json
 import math
@@ -10,6 +10,7 @@ import sqlite3
 import threading
 from urllib.request import Request, urlopen
 from .models import finite_number
+from .embedding_cache import EmbeddingCache
 
 
 def validate_vector(vector):
@@ -58,7 +59,25 @@ class SemanticMatcher:
         self.key = api_key if api_key is not None else os.getenv("OPENAI_API_KEY", "")
         self.model = model or os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
         self.cache_dir = Path(cache_dir)
-        self.lock = threading.Lock()
+        self.cache = EmbeddingCache(cache_dir)
+        self._guard = threading.Lock()
+        self._requests = {}
+
+    @contextmanager
+    def _request_lock(self, key):
+        # Only identical requests share a lock. Cached/unrelated queries never
+        # wait for another query's provider call. Remove idle locks to bound memory.
+        with self._guard:
+            entry = self._requests.setdefault(key, [threading.Lock(), 0])
+            entry[1] += 1
+        try:
+            with entry[0]:
+                yield
+        finally:
+            with self._guard:
+                entry[1] -= 1
+                if entry[1] == 0:
+                    del self._requests[key]
 
     def _embed(self, texts):
         payload = json.dumps({"model": self.model, "input": texts, "encoding_format": "float"}).encode()
@@ -71,55 +90,61 @@ class SemanticMatcher:
             raise ValueError("Incomplete embeddings response")
         return [row["embedding"] for row in sorted(rows, key=lambda r: r["index"])]
 
-    def similarities(self, event, candidates, fingerprint):
+    def similarities(self, event, candidates, fingerprint, refresh=False):
         if not candidates:
             return None, "not_needed"
         if not self.enabled:
             return None, "disabled"
         query = semantic_query(event)
-        identity = json.dumps(["v2", self.model, fingerprint, asdict(event), sorted(c.id for c in candidates)],
+        identity = json.dumps(["v3", self.model, fingerprint, asdict(event), sorted(c.id for c in candidates)],
                               ensure_ascii=False, sort_keys=True, allow_nan=False)
         decision_key = hashlib.sha256(identity.encode()).hexdigest()
-        # Decisions (including API failures) persist so repeated requests keep order.
-        with self.lock:
+        # Keep ordinary repeats stable. Explicit refresh can replace a failed
+        # snapshot; successful snapshots never need another provider call.
+        with self._request_lock(decision_key):
             try:
-                self.cache_dir.mkdir(parents=True, exist_ok=True)
-                with closing(sqlite3.connect(self.cache_dir / "embeddings.sqlite3")) as db, db:
-                    db.execute("CREATE TABLE IF NOT EXISTS vectors (key TEXT PRIMARY KEY, value TEXT)")
-                    db.execute("CREATE TABLE IF NOT EXISTS decisions (key TEXT PRIMARY KEY, value TEXT)")
-                    saved = db.execute("SELECT value FROM decisions WHERE key=?", (decision_key,)).fetchone()
-                    if saved:
-                        return cached_decision(saved[0], candidates)
-                    scores, mode = None, "missing_key"
-                    if self.key:
+                saved = self.cache.decision(decision_key)
+                if saved:
+                    try:
+                        scores, mode = cached_decision(saved, candidates)
+                    except (ValueError, TypeError, RecursionError):
+                        if not refresh:
+                            return None, "cache_unavailable"
+                    else:
+                        if mode == "embeddings" or not refresh:
+                            return scores, mode
+                if not self.key:
+                    return None, "missing_key"
+                texts = [query] + [c.description or "Описание не указано" for c in candidates]
+                keys = [hashlib.sha256((self.model + "\0" + t).encode()).hexdigest() for t in texts]
+                stored = self.cache.vectors(keys)
+                vectors, missing = {}, {}
+                for key, value in zip(keys, texts):
+                    if key in stored:
                         try:
-                            texts = [query] + [c.description or "Описание не указано" for c in candidates]
-                            keys = [hashlib.sha256((self.model + "\0" + t).encode()).hexdigest() for t in texts]
-                            vectors, missing = {}, {}
-                            for key, value in zip(keys, texts):
-                                cached = db.execute("SELECT value FROM vectors WHERE key=?", (key,)).fetchone()
-                                if cached:
-                                    vectors[key] = json.loads(cached[0])
-                                    validate_vector(vectors[key])
-                                else:
-                                    missing[key] = value
-                            if missing:
-                                embeddings = self._embed(list(missing.values()))
-                                if len(embeddings) != len(missing):
-                                    raise ValueError("Incomplete embedding batch")
-                                for key, vector in zip(missing, embeddings):
-                                    validate_vector(vector)
-                                    vectors[key] = vector
-                                    db.execute("INSERT OR REPLACE INTO vectors VALUES (?, ?)", (key, json.dumps(vector)))
-                            scores = {c.id: cosine(vectors[keys[0]], vectors[key]) for c, key in zip(candidates, keys[1:])}
-                            mode = "embeddings"
-                        except Exception:
-                            # Never expose tokens, upstream errors or partial semantic rankings.
-                            scores, mode = None, "unavailable"
-                    # A missing key is configuration, not a cached provider failure.
-                    if mode != "missing_key":
-                        db.execute("INSERT OR REPLACE INTO decisions VALUES (?, ?)",
-                                   (decision_key, json.dumps({"scores": scores, "mode": mode})))
-                    return scores, mode
-            except (OSError, sqlite3.Error, ValueError):
+                            vector = json.loads(stored[key])
+                            validate_vector(vector)
+                            vectors[key] = vector
+                            continue
+                        except (ValueError, TypeError, RecursionError):
+                            pass  # Rebuild only malformed vectors; never trust them.
+                    missing[key] = value
+                fresh_vectors = {}
+                try:
+                    if missing:
+                        embeddings = self._embed(list(missing.values()))
+                        if len(embeddings) != len(missing):
+                            raise ValueError("Incomplete embedding batch")
+                        for key, vector in zip(missing, embeddings):
+                            validate_vector(vector)
+                            fresh_vectors[key] = vector
+                        vectors.update(fresh_vectors)
+                    scores = {c.id: cosine(vectors[keys[0]], vectors[key]) for c, key in zip(candidates, keys[1:])}
+                    mode = "embeddings"
+                except Exception:
+                    # Never expose tokens, upstream errors or partial rankings.
+                    scores, mode, fresh_vectors = None, "unavailable", {}
+                self.cache.save(decision_key, scores, mode, fresh_vectors)
+                return scores, mode
+            except (OSError, sqlite3.Error, ValueError, RecursionError):
                 return None, "cache_unavailable"
