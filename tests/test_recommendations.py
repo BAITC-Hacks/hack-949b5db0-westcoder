@@ -134,12 +134,14 @@ class RecommendationTests(unittest.TestCase):
             self.assertEqual(sum(result["excluded_reasons"].values()) + result["eligible_candidates"], 66)
             self.assertEqual(len(result["excluded_candidates"]), sum(result["excluded_reasons"].values()))
 
-    def test_suggestions_are_real_and_change_only_one_field(self):
+    def test_suggestions_are_real_and_change_only_declared_fields(self):
         for demo in self.demos:
             original = demo["request"].copy()
             result = self.service.recommend(original)
             for suggestion in result["suggestions"]:
-                revised = {**original, suggestion["field"]:suggestion["value"]}
+                self.assertTrue(1 <= len(suggestion["changes"]) <= 3)
+                self.assertTrue(set(suggestion["changes"]) <= {"budget_kzt", "date", "language", "duration_hours"})
+                revised = {**original, **suggestion["changes"]}
                 count = len(hard_filter(self.dataset.contractors, EventRequest.parse(revised))[0])
                 self.assertEqual(count, suggestion["eligible_candidates"])
                 self.assertEqual(count - result["eligible_candidates"], suggestion["additional_candidates"])

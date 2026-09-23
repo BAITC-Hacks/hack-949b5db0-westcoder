@@ -26,7 +26,9 @@ def make_server(host="127.0.0.1", port=8000, service=None):
     metadata = service.dataset.metadata()
     metadata["demos"] = build_demos(service.dataset)
     static = {"/": ("index.html", "text/html"), "/styles.css": ("styles.css", "text/css"),
-              "/app.js": ("app.js", "text/javascript"), "/favicon.svg": ("favicon.svg", "image/svg+xml")}
+              "/app.js": ("app.js", "text/javascript"), "/features.js": ("features.js", "text/javascript"),
+              "/features.css": ("features.css", "text/css"),
+              "/favicon.svg": ("favicon.svg", "image/svg+xml")}
 
     class Handler(BaseHTTPRequestHandler):
         def setup(self):
@@ -36,14 +38,18 @@ def make_server(host="127.0.0.1", port=8000, service=None):
         def send(self, code, body, content_type="application/json"):
             if not isinstance(body, bytes):
                 body = json.dumps(body, ensure_ascii=False, allow_nan=False).encode("utf-8")
-            self.send_response(code)
-            self.send_header("Content-Type", content_type + "; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("X-Content-Type-Options", "nosniff")
-            self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; frame-ancestors 'none'")
-            self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.send_response(code)
+                self.send_header("Content-Type", content_type + "; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; frame-ancestors 'none'")
+                self.end_headers()
+                self.wfile.write(body)
+            except (ConnectionError, TimeoutError):
+                # A cancelled calendar request has no client to send a 500 to.
+                self.close_connection = True
 
         def do_GET(self):
             path = urlsplit(self.path).path
@@ -51,13 +57,17 @@ def make_server(host="127.0.0.1", port=8000, service=None):
                 return self.send(200, {"status": "ok", "profiles": metadata["total"]})
             if path == "/api/meta":
                 return self.send(200, metadata)
+            if path == "/about.html":
+                return self.send(200, (ROOT / "about.html").read_bytes(), "text/html")
             if path in static:
                 filename, mime = static[path]
                 return self.send(200, (ROOT / "frontend" / filename).read_bytes(), mime)
             return self.send(404, {"error": "Не найдено."})
 
         def do_POST(self):
-            if urlsplit(self.path).path != "/api/recommend":
+            routes = {"/api/recommend": service.recommend, "/api/calendar": service.calendar, "/api/team": service.team}
+            action = routes.get(urlsplit(self.path).path)
+            if action is None:
                 return self.send(404, {"error": "Не найдено."})
             if self.headers.get_content_type() != "application/json":
                 return self.send(415, {"error": "Нужен Content-Type: application/json."})
@@ -69,9 +79,11 @@ def make_server(host="127.0.0.1", port=8000, service=None):
                     payload = json.loads(self.rfile.read(size))
                 except RecursionError:
                     return self.send(400, {"error": "Слишком большая вложенность JSON."})
-                self.send(200, service.recommend(payload))
+                self.send(200, action(payload))
             except ValidationError as error:
                 self.send(422, {"error": str(error), "fields": error.errors})
+            except (ConnectionError, TimeoutError):
+                self.close_connection = True
             except (ValueError, UnicodeError):
                 self.send(400, {"error": "Некорректный JSON."})
             except Exception:
@@ -91,7 +103,7 @@ def main():
     semantic = SemanticMatcher(os.getenv("CACHE_DIR", str(ROOT / ".cache")),
                                enabled=os.getenv("ENABLE_EMBEDDINGS", "false").lower() == "true")
     server = make_server(args.host, args.port, RecommendationService(dataset, semantic))
-    print(f"EventMatch: http://{args.host}:{args.port} | {len(dataset.contractors)} profiles", flush=True)
+    print(f"EventMatch: http://{args.host}:{server.server_port} | {len(dataset.contractors)} profiles", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

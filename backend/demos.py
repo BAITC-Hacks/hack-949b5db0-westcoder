@@ -1,7 +1,7 @@
 """Choose reproducible demos from actual rows, never manufacture profiles."""
 from datetime import timedelta
 from collections import Counter
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from .models import EventRequest, iso_date, CALENDAR_START, CALENDAR_END
 from .filters import hard_filter
 
@@ -38,6 +38,22 @@ def build_demos(dataset):
             if count >= target:
                 break
         found.append({"title": title, "request": asdict(best[1]), "expected_eligible": best[0]})
+    found = [demo for demo in found if demo["expected_eligible"]]
+    if not found:
+        for candidate in rows:
+            if (not candidate.city or not candidate.categories or not candidate.event_formats
+                    or candidate.price_from_kzt is None):
+                continue
+            event = EventRequest(candidate.city, CALENDAR_START, candidate.event_formats[0],
+                                 candidate.categories[0], candidate.price_from_kzt)
+            for day in range((iso_date(CALENDAR_END) - iso_date(CALENDAR_START)).days + 1):
+                changed = replace(event, date=(iso_date(CALENDAR_START) + timedelta(days=day)).isoformat())
+                count = len(hard_filter(rows, changed)[0])
+                if count:
+                    found.append({"title": "Пример подбора", "request": asdict(changed), "expected_eligible": count})
+                    break
+            if found:
+                break
     if not found:
         return []
     first = EventRequest.parse(found[0]["request"])

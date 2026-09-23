@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import sqlite3
 import threading
+import time
 from urllib.request import Request, urlopen
 from .models import finite_number
 
@@ -43,6 +44,8 @@ def cached_decision(raw, candidates):
 
 
 def semantic_query(event):
+    if event.preferences:
+        return f"{event.category}. Формат: {event.event_format}. Пожелания: {event.preferences}"
     parts = [event.category, event.city, f"Формат: {event.event_format}",
              f"Бюджет: {event.budget_kzt} тенге", f"Дата: {event.date}"]
     if event.duration_hours is not None:
@@ -80,7 +83,7 @@ class SemanticMatcher:
         identity = json.dumps(["v2", self.model, fingerprint, asdict(event), sorted(c.id for c in candidates)],
                               ensure_ascii=False, sort_keys=True, allow_nan=False)
         decision_key = hashlib.sha256(identity.encode()).hexdigest()
-        # Decisions (including API failures) persist so repeated requests keep order.
+        # Cache failures briefly; successful decisions stay reproducible.
         with self.lock:
             try:
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -89,7 +92,15 @@ class SemanticMatcher:
                     db.execute("CREATE TABLE IF NOT EXISTS decisions (key TEXT PRIMARY KEY, value TEXT)")
                     saved = db.execute("SELECT value FROM decisions WHERE key=?", (decision_key,)).fetchone()
                     if saved:
-                        return cached_decision(saved[0], candidates)
+                        cached_scores, cached_mode = cached_decision(saved[0], candidates)
+                        if cached_mode == "embeddings":
+                            return cached_scores, cached_mode
+                        result = json.loads(saved[0])
+                        saved_at = result.get("saved_at", 0)
+                        if not finite_number(saved_at) or saved_at < 0:
+                            raise ValueError("Invalid cached decision timestamp")
+                        if 0 <= time.time() - saved_at < 300:
+                            return cached_scores, cached_mode
                     scores, mode = None, "missing_key"
                     if self.key:
                         try:
@@ -119,7 +130,7 @@ class SemanticMatcher:
                     # A missing key is configuration, not a cached provider failure.
                     if mode != "missing_key":
                         db.execute("INSERT OR REPLACE INTO decisions VALUES (?, ?)",
-                                   (decision_key, json.dumps({"scores": scores, "mode": mode})))
+                                   (decision_key, json.dumps({"scores": scores, "mode": mode, "saved_at": time.time()})))
                     return scores, mode
             except (OSError, sqlite3.Error, ValueError):
                 return None, "cache_unavailable"

@@ -1,0 +1,73 @@
+html { scroll-behavior:smooth; scroll-padding-top:24px; }
+textarea { font:inherit; width:100%; resize:vertical; min-height:86px; border:1px solid #e5e1ec; border-radius:8px; padding:11px 12px; color:var(--ink); background:white; line-height:1.6; }
+textarea:focus { outline:2px solid var(--purple); outline-offset:2px; }
+.form-panel { position:static; }
+.score strong span { font-size:11px; margin-left:2px; letter-spacing:0; }
+.secondary-button { border:1px solid #d7cce9; background:#faf8fe; color:#624691; border-radius:8px; padding:9px 12px; font-size:12px; }
+.secondary-button:hover:not(:disabled) { background:#eee6fb; }
+.text-button { border:0; padding:8px 0; color:var(--purple-dark); background:transparent; font-size:12px; }
+.profile-actions { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:15px 0 8px; flex-wrap:wrap; }
+.compare-choice { display:flex; align-items:center; gap:7px; margin:0; color:#655c73; font-size:12px; cursor:pointer; }
+.compare-choice input { width:16px; height:16px; min-height:0; accent-color:var(--purple); padding:0; }
+.preference-details { margin-top:13px; padding:11px 12px; background:#f4f7fb; border-radius:8px; font-size:12px; line-height:1.65; color:#5d566a; }
+.preference-details summary { cursor:pointer; font-weight:600; }
+.preference-details p { margin:9px 0; overflow-wrap:anywhere; }
+.conflict-text,.data-warning { color:#896021; }
+.calendar-panel { margin-bottom:18px; padding:17px 20px; }
+.calendar-panel>summary { cursor:pointer; font-weight:600; color:var(--purple-dark); font-size:13px; }
+#calendar-content>p { color:#746b80; line-height:1.65; font-size:12px; }
+.calendar-controls { display:flex; align-items:center; justify-content:space-between; margin:16px 0; gap:10px; }
+.calendar-controls strong { text-transform:capitalize; font-size:14px; }
+.calendar-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:5px; }
+.weekday { text-align:center; color:#85758f; padding:6px 0; font-size:11px; }
+.calendar-day { display:flex; align-items:center; flex-direction:column; gap:5px; border:1px solid transparent; border-radius:8px; padding:9px 3px; min-height:53px; }
+.calendar-day small { font-size:9px; }
+.calendar-day.has-matches { background:#edf7f2; color:#256851; }
+.calendar-day.no-matches { background:#f4f2f7; color:#756c81; }
+.calendar-day.best-day { border-color:#70b39b; }
+.calendar-day[aria-pressed=true] { outline:2px solid var(--purple); outline-offset:1px; background:#eee7fb; color:#624294; }
+.calendar-outside { text-align:center; padding-top:9px; color:#b7b1bd; }
+.calendar-legend { margin-bottom:0; }
+.feature-section { padding:28px; margin-top:30px; }
+.section-heading { display:flex; justify-content:space-between; align-items:center; gap:20px; }
+.section-heading h2 { font-size:23px; margin-top:7px; }
+.section-description { color:#796f86; line-height:1.7; font-size:13px; max-width:840px; }
+.team-fields { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0 18px; }
+.team-fields label,.team-role label { font-size:12px; }
+.team-role-heading { display:flex; align-items:baseline; gap:15px; flex-wrap:wrap; margin:20px 0 0; }
+.team-role-heading h3 { font-size:14px; margin-bottom:0; }
+.team-role-heading span { color:var(--muted); font-size:12px; }
+.team-role { display:grid; grid-template-columns:minmax(140px,2fr) minmax(100px,1fr) 40px; gap:14px; max-width:720px; align-items:end; }
+.team-role label { margin-bottom:12px; }
+.team-role input,.team-role select { margin-top:8px; }
+.team-role .remove-role { height:40px; margin-bottom:12px; font-size:20px; padding:0; }
+#team-submit { width:auto; min-width:240px; font-size:13px; }
+.team-result-heading { margin-top:25px; border-top:1px solid var(--line); padding-top:12px; }
+.team-result-heading h3 { font-size:16px; line-height:1.5; }
+.team-result-heading p { color:#776983; font-size:12px; }
+.team-total { display:flex; flex-wrap:wrap; gap:18px 40px; padding:18px 22px; border-radius:12px; background:#edf7f2; color:#28735a; margin:18px 0; }
+.team-total small,.team-total strong { display:block; }
+.team-total small { font-size:11px; margin-bottom:6px; }
+.team-total strong { font-size:23px; }
+.saved-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:15px; margin-top:18px; }
+.saved-card { border:1px solid var(--line); border-radius:12px; padding:20px; min-width:0; }
+.saved-card h3 { font-size:17px; margin:0 0 10px; }
+.saved-card p { line-height:1.7; font-size:12px; color:#746781; overflow-wrap:anywhere; }
+.saved-card .data-warning { color:#896021; }
+.saved-card .role-name { margin-top:0; color:var(--purple); font-weight:600; }
+.saved-card>strong { font-size:18px; }
+.saved-card details { font-size:12px; line-height:1.7; margin-top:12px; }
+.saved-card summary { cursor:pointer; color:var(--purple-dark); }
+.saved-card-buttons { display:flex; justify-content:space-between; gap:12px; }
+.comparison-bar { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); z-index:8; display:flex; align-items:center; gap:16px; padding:12px 18px; border:1px solid #a990d2; border-radius:12px; background:#332446; color:white; box-shadow:0 5px 25px #29263733; font-size:13px; }
+.comparison-bar button { color:white; border:1px solid #857196; border-radius:7px; padding:8px 12px; background:#5f447b; }
+.comparison-scroll { overflow:auto; max-height:60vh; }
+.comparison-table { min-width:580px; table-layout:fixed; }
+.comparison-table td,.comparison-table th { vertical-align:top; min-width:120px; line-height:1.7; overflow-wrap:anywhere; }
+.comparison-table thead th { position:sticky; top:0; background:#f1ecf8; color:#4e3769; }
+.comparison-table tbody th { background:#faf8fc; }
+dialog:has(.comparison-table) { max-width:1050px; }
+footer { padding-bottom:85px; }
+@media(max-width:1000px) { .team-fields { grid-template-columns:repeat(2,minmax(0,1fr)); } .feature-section { padding:22px; } }
+@media(max-width:760px) { .form-panel textarea,.form-panel form>small { grid-column:1/-1; } .form-panel textarea { font-size:14px; } .sidebar { height:auto; min-height:65px; gap:8px; flex-wrap:wrap; padding-block:12px; } nav { flex-wrap:wrap; } .section-heading { align-items:flex-start; flex-direction:column; gap:12px; } .section-heading h2 { font-size:21px; } .feature-section { padding:20px 16px; } .team-fields { gap:0 10px; } .team-role { grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) 30px; gap:8px; } .team-role label { font-size:11px; } .team-role select { padding-left:6px; font-size:11px; } .comparison-bar { width:calc(100% - 24px); justify-content:space-between; gap:8px; font-size:11px; padding:10px; } .comparison-bar button { padding:8px; } .calendar-panel { padding:14px 12px; } }
+@media(prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }

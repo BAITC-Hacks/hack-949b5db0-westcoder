@@ -8,7 +8,7 @@ sys.path.insert(0, str(ROOT / ".tools"))
 from playwright.sync_api import sync_playwright, expect
 
 
-def run():
+def run(base_url="http://127.0.0.1:8000"):
     artifacts = ROOT / "artifacts"
     artifacts.mkdir(exist_ok=True)
     errors = []
@@ -16,7 +16,8 @@ def run():
         browser = playwright.chromium.launch(channel="chrome", headless=True)
         page = browser.new_page(viewport={"width":1440,"height":1050},device_scale_factor=1)
         page.on("pageerror", lambda error: errors.append(str(error)))
-        page.goto("http://127.0.0.1:8000",wait_until="networkidle")
+        with page.expect_response('**/api/recommend') as initial_response:
+            page.goto(base_url,wait_until="networkidle")
         page.wait_for_selector(".candidate-card")
         assert page.locator(".candidate-card").count() == 3
         assert "4" in page.locator(".result-subtitle").inner_text()
@@ -24,7 +25,8 @@ def run():
         page.screenshot(path=str(artifacts / "desktop.png"),full_page=True)
         page.locator("[data-detail='0']").click()
         assert page.locator("dialog").is_visible()
-        assert page.locator("dialog table tbody tr").count() == 4
+        breakdown = initial_response.value.json()['recommendations'][0]['score_breakdown']
+        assert page.locator("dialog table tbody tr").count() == len(breakdown)
         page.keyboard.press("Escape")
         page.locator("[data-demo='1']").click()
         expect(page.locator('#results')).to_have_attribute('aria-busy', 'false')
@@ -84,7 +86,7 @@ def run():
         startup = browser.new_page()
         startup.on('pageerror', lambda error: errors.append(str(error)))
         startup.route('**/api/meta', lambda route: route.abort())
-        startup.goto('http://127.0.0.1:8000')
+        startup.goto(base_url)
         expect(startup.locator('#retry-init')).to_be_visible()
         startup.unroute('**/api/meta')
         startup.locator('#retry-init').click()
