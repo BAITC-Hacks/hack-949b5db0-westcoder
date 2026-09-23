@@ -11,11 +11,12 @@ const AxeBuilder=require('../.tools/ui-test/node_modules/@axe-core/playwright').
 const root=fileURLToPath(new URL('../',import.meta.url));
 
 test('Chrome: brief review, team, reserve alternatives, export, recovery and responsive layout',{timeout:90000},async()=>{
-  const server=spawn(process.env.PYTHON || 'python',['-B','-m','backend.server','--port','0'],{cwd:root,windowsHide:true,env:{...process.env,ENABLE_EMBEDDINGS:'false',ENABLE_AI_BRIEF:'false'},stdio:['ignore','pipe','pipe']});
+  // Set EVENTMATCH_TEST_URL to check an already running local server as well.
+  const server=process.env.EVENTMATCH_TEST_URL ? null : spawn(process.env.PYTHON || 'python',['-B','-m','backend.server','--port','0'],{cwd:root,windowsHide:true,env:{...process.env,ENABLE_EMBEDDINGS:'false',ENABLE_AI_BRIEF:'false'},stdio:['ignore','pipe','pipe']});
   let stdout='',stderr='',browser;
-  server.stdout.on('data',data=>stdout+=data);server.stderr.on('data',data=>stderr+=data);
+  server?.stdout.on('data',data=>stdout+=data);server?.stderr.on('data',data=>stderr+=data);
   try {
-    const base=await new Promise((resolve,reject)=>{
+    const base=process.env.EVENTMATCH_TEST_URL || await new Promise((resolve,reject)=>{
       const timer=setTimeout(()=>reject(new Error('Server startup timed out: '+stderr)),8000);
       server.on('error',reject);
       server.stdout.on('data',()=>{const m=stdout.match(/http:\/\/127\.0\.0\.1:\d+/);if(m){clearTimeout(timer);resolve(m[0]);}});
@@ -24,8 +25,24 @@ test('Chrome: brief review, team, reserve alternatives, export, recovery and res
     browser=await chromium.launch({channel:'chrome',headless:true});
     const context=await browser.newContext({viewport:{width:1440,height:1050},deviceScaleFactor:1});
     const page=await context.newPage();
-    const errors=[];page.on('pageerror',error=>errors.push(error.message));
+    const errors=[],assetErrors=[];page.on('pageerror',error=>errors.push(error.message));
+    page.on('response',response=>{
+      if (['stylesheet','script'].includes(response.request().resourceType()) && !response.ok())
+        assetErrors.push(`${response.status()} ${response.url()}`);
+    });
+    page.on('requestfailed',request=>{
+      if (['stylesheet','script'].includes(request.resourceType())) assetErrors.push(request.url());
+    });
     await page.goto(base,{waitUntil:'networkidle'});
+    assert.deepEqual(assetErrors,[],'All stylesheets and scripts must load; restart the server after backend updates');
+    const styles=await page.evaluate(()=>({
+      studioLoaded:[...document.styleSheets].some(sheet=>new URL(sheet.href || location.href).pathname==='/studio.css'),
+      briefDisplay:getComputedStyle(document.querySelector('#brief-panel')).display,
+      scripts:[...document.querySelectorAll('script[src]')].map(script=>script.src),
+    }));
+    assert.equal(styles.studioLoaded,true,'Studio stylesheet is attached');
+    assert.equal(styles.briefDisplay,'grid','The planning workspace must have its layout styles applied');
+    assert.equal(new Set(styles.scripts).size,styles.scripts.length,'Modules must be included only once');
     await page.locator('.candidate-card').first().waitFor();
     assert.equal(await page.locator('.candidate-card').count(),3);
     await page.screenshot({path:root+'artifacts/studio-desktop.png'});
@@ -91,5 +108,5 @@ test('Chrome: brief review, team, reserve alternatives, export, recovery and res
     await page.keyboard.press('Escape');
     assert.deepEqual(errors,[],'No browser runtime errors');
     assert.doesNotMatch(stderr,/Traceback/);
-  } finally {await browser?.close();server.kill();}
+  } finally {await browser?.close();server?.kill();}
 });
