@@ -11,6 +11,7 @@ Team Members:
 - Repository initialized
 - Team setup completed
 - Initial development phase started
+- Planning a project step by step and divide between team members 
 
 ## Development
 
