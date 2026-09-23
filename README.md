@@ -6,12 +6,13 @@ Team Members:
 3. Nurkeldi Adilov
  
 
- ## Project Status
+ ## Project Status(steps)
 
 - Repository initialized
 - Team setup completed
 - Initial development phase started
-- Planning a project step by step and divide between team members 
+- Planning a project step by step and divide between team members
+- Added backend, frontend an data folders
 
 ## Development
 
