@@ -4,3 +4,15 @@ Team Members:
 1. Nurtilek Koblandy
 2. Meirbek Arystanov
 3. Nurkeldi Adilov
+ 
+
+ ## Project Status
+
+- Repository initialized
+- Team setup completed
+- Initial development phase started
+
+## Development
+
+The project is currently in the initial development stage.
+The team will use this repository to manage source code, documentation, and project updates.
